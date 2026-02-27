@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		6CFB4E552F51F471005AA128 /* AgentController Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 6CFB4E542F51F471005AA128 /* AgentController Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		6CFB4E6A2F51F7DB005AA128 /* AWSCore in Frameworks */ = {isa = PBXBuildFile; productRef = 6CFB4E692F51F7DB005AA128 /* AWSCore */; };
+		6CFB4E6C2F51F7DB005AA128 /* AWSIoT in Frameworks */ = {isa = PBXBuildFile; productRef = 6CFB4E6B2F51F7DB005AA128 /* AWSIoT */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -57,6 +59,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6CFB4E6A2F51F7DB005AA128 /* AWSCore in Frameworks */,
+				6CFB4E6C2F51F7DB005AA128 /* AWSIoT in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -110,6 +114,8 @@
 			);
 			name = AgentController;
 			packageProductDependencies = (
+				6CFB4E692F51F7DB005AA128 /* AWSCore */,
+				6CFB4E6B2F51F7DB005AA128 /* AWSIoT */,
 			);
 			productName = AgentController;
 			productReference = 6CFB4E472F51F470005AA128 /* AgentController.app */;
@@ -164,6 +170,9 @@
 			);
 			mainGroup = 6CFB4E3E2F51F46F005AA128;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				6CFB4E682F51F7DB005AA128 /* XCRemoteSwiftPackageReference "aws-sdk-ios-spm" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6CFB4E482F51F470005AA128 /* Products */;
 			projectDirPath = "";
@@ -497,6 +506,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		6CFB4E682F51F7DB005AA128 /* XCRemoteSwiftPackageReference "aws-sdk-ios-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/aws-amplify/aws-sdk-ios-spm";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.41.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		6CFB4E692F51F7DB005AA128 /* AWSCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6CFB4E682F51F7DB005AA128 /* XCRemoteSwiftPackageReference "aws-sdk-ios-spm" */;
+			productName = AWSCore;
+		};
+		6CFB4E6B2F51F7DB005AA128 /* AWSIoT */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6CFB4E682F51F7DB005AA128 /* XCRemoteSwiftPackageReference "aws-sdk-ios-spm" */;
+			productName = AWSIoT;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 6CFB4E3F2F51F46F005AA128 /* Project object */;
 }
