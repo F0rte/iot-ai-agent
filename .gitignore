@@ -2,5 +2,26 @@
 .env*
 !.env.example
 
+**/Secrets.swift
+
+# Mac OS
+.DS_Store
+
 # Node.js
 node_modules/
+
+# Swift App
+build/
+DeriveData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+.swiftpm/
+packages/
+Package.resolved
+
+xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcscmblueprint
