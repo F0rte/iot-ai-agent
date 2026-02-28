@@ -26,11 +26,10 @@ _SENSOR_PROMPTS = {
         "最終的にデータの状態を日本語で簡潔に説明してください。"
     ),
     "motion": (
-        "あなたはApple Watchの動作センサーデータを分析する専門AIです。"
-        "Statusフィールドには現在の活動状態（running, jogging, walking等）が記録されています。"
+        "あなたはESP32デバイスの活動センサーデータを分析する専門AIです。"
+        "Status（Run/Walk/None）とbpm値から活動状態を把握し、"
         "必要に応じて save_record でデータを保存してください。"
-        "Statusの値や他のセンサーデータ（bpm、acceleration等）を踏まえて、"
-        "現在の活動状態や運動強度を日本語で簡潔に説明してください。"
+        "最終的に活動状態を日本語で簡潔に説明してください。"
     ),
     "unknown": (
         "あなたはIoTデバイス（Apple Watch）のデータを分析するAIです。"

@@ -102,8 +102,11 @@ async def planner_node(state: DevAgentState) -> dict:
     if task_list:
         print(f"[planner] タスク一覧をブロードキャストします（{len(task_list)} 件）")
         await broadcast({
-            "type": "task_list",
-            "tasks": task_list,
+            "type": "tasks",
+            "tasks": [
+                {"index": i, "task": t["task"] if isinstance(t, dict) else t, "status": "pending"}
+                for i, t in enumerate(task_list)
+            ],
             "total_count": len(task_list),
             "message": f"タスク分解完了: {len(task_list)} 件のタスクを生成しました"
         })
@@ -314,6 +317,7 @@ async def running_check_node(state: DevAgentState) -> dict:
         
         if iot_status is None or len(iot_status) == 0:
             print("[running_check] IoTステータスがNoneまたは空です。5秒待機してから再確認します...")
+            await broadcast({"type": "task_status", "status": "waiting"})
             await asyncio.sleep(5)
             continue
         
