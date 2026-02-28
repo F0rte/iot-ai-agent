@@ -69,7 +69,7 @@ async def planner_node(state: DevAgentState) -> dict:
         f"2. list_files でプロジェクト構造を把握し、必要に応じて既存コードを read_file で確認する\n"
         f"3. 要件を実装可能な具体的タスクに分解する。各タスクは独立して実装できる単位にすること\n\n"
         f"最終的な出力は以下のJSON形式のみで返してください（余分な説明不要）:\n"
-        f'[\"タスク1の具体的な実装内容\", \"タスク2の具体的な実装内容\", ...]'
+        f'[{{"task": "タスク1の具体的な実装内容", "read_files": ["読む必要があるファイルパス"], "write_files": ["編集・作成するファイルパス"]}}, ...]'
     )
 
     print(f"[planner] model_tier={tier} ({_MODEL_IDS.get(tier)})")
@@ -80,15 +80,25 @@ async def planner_node(state: DevAgentState) -> dict:
         if start == -1:
             raise ValueError("No JSON array found in response")
         end = response.rfind("]") + 1
-        task_list = json.loads(response[start:end])
+        raw_list = json.loads(response[start:end])
+        # 旧形式（文字列）と新形式（dict）両対応
+        task_list = []
+        for item in raw_list:
+            if isinstance(item, str):
+                task_list.append({"task": item, "read_files": [], "write_files": []})
+            else:
+                task_list.append(item)
     except (json.JSONDecodeError, ValueError) as e:
         print(f"[planner] JSONパースエラー: {e}")
         print(f"[planner] 生レスポンス: {response[:200]}...")
-        task_list = [response.strip()]
+        task_list = [{"task": response.strip(), "read_files": [], "write_files": []}]
 
+    first = task_list[0] if task_list else {}
     return {
         "task_list": task_list,
-        "current_task": task_list[0] if task_list else "",
+        "current_task": first.get("task", ""),
+        "current_read_files": first.get("read_files", []),
+        "current_write_files": first.get("write_files", []),
         "messages": [],
     }
 
@@ -98,14 +108,25 @@ async def coder_node(state: DevAgentState) -> dict:
     task = state.get("current_task", "")
     workspace_root = state.get("workspace_root", "")
     tier = state.get("model_tier", "haiku")
+    read_files = state.get("current_read_files", [])
+    write_files = state.get("current_write_files", [])
+
+    file_hint = ""
+    if read_files or write_files:
+        file_hint = (
+            f"\n\n【ファイルヒント（plannerが特定済み）】\n"
+            f"読み込むファイル: {read_files}\n"
+            f"編集・作成するファイル: {write_files}\n"
+            f"list_files による探索は不要です。上記ファイルを直接 read_file してください。"
+        )
 
     print(f"[coder] model_tier={tier} ({_MODEL_IDS.get(tier)})")
     prompt = (
         f"あなたは自律開発エージェントのコーダーです。\n"
         f"ワークスペース: {workspace_root}\n\n"
-        f"以下のタスクを実装してください:\n{task}\n\n"
-        f"必要に応じて list_files でプロジェクト構造を確認し、"
-        f"read_file で既存コードを読み込んだ上で、"
+        f"以下のタスクを実装してください:\n{task}"
+        f"{file_hint}\n\n"
+        f"read_file で対象ファイルを読み込んだ上で、"
         f"write_file で実装コードをファイルに書き込んでください。\n"
         f"実装後は run_shell でテストやビルドを実行して動作確認してください。"
     )
@@ -142,10 +163,12 @@ def running_check_node(state: DevAgentState) -> dict:
     if task_list:
         task_list.pop(0)
 
-    next_task = task_list[0] if task_list else ""
+    next_item = task_list[0] if task_list else {}
     return {
         "task_list": task_list,
-        "current_task": next_task,
+        "current_task": next_item.get("task", "") if isinstance(next_item, dict) else next_item,
+        "current_read_files": next_item.get("read_files", []) if isinstance(next_item, dict) else [],
+        "current_write_files": next_item.get("write_files", []) if isinstance(next_item, dict) else [],
         "is_running": is_running,
     }
 
@@ -181,6 +204,8 @@ async def run_dev_agent(workspace_root: str, model_tier: str = "haiku", plan_pat
         "model_tier": model_tier,
         "task_list": [],
         "current_task": "",
+        "current_read_files": [],
+        "current_write_files": [],
         "is_running": True,
         "messages": [],
     })

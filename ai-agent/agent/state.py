@@ -17,7 +17,9 @@ class DevAgentState(TypedDict):
     """自律開発マルチエージェント用のstate"""
     workspace_root: str
     model_tier: str         # "haiku" | "sonnet" | "opus"
-    task_list: list[str]    # planner が生成したタスク一覧
+    task_list: list[dict]   # planner が生成したタスク一覧 {"task": str, "read_files": list[str], "write_files": list[str]}
     current_task: str       # 現在処理中のタスク
+    current_read_files: list[str]   # 現在タスクで読むべきファイル一覧（plannerが特定）
+    current_write_files: list[str]  # 現在タスクで書くべきファイル一覧（plannerが特定）
     is_running: bool        # 走行中フラグ
     messages: list[BaseMessage]  # ノードごとにリセットして使用
