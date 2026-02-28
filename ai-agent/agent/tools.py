@@ -111,6 +111,28 @@ def read_file(path: str) -> str:
 
 
 @tool
+def read_file_lines(path: str, start_line: int, end_line: int) -> str:
+    """ワークスペース内のファイルを指定行範囲だけ読み込む（トークン節約用）。
+
+    Args:
+        path: ワークスペースルートからの相対パス（例: src/main.py）
+        start_line: 読み始める行番号（1始まり）
+        end_line: 読み終わる行番号（inclusive）
+    """
+    full_path = _resolve(path)
+    if not os.path.exists(full_path):
+        return f"エラー: ファイルが見つかりません: {path}"
+    with open(full_path, encoding="utf-8") as f:
+        lines = f.readlines()
+    total = len(lines)
+    s = max(0, start_line - 1)
+    e = min(total, end_line)
+    selected = lines[s:e]
+    header = f"[{path} 行 {s+1}〜{e} / 全{total}行]\n"
+    return header + "".join(selected)
+
+
+@tool
 def write_file(path: str, content: str) -> str:
     """ワークスペース内のファイルを書き込む（新規作成・上書き）。
 
@@ -199,5 +221,5 @@ def run_shell(command: str, cwd: str = ".") -> str:
         return f"エラー: コマンド実行失敗: {e}"
 
 
-FILE_TOOLS = [read_file, write_file, list_files, run_shell]
+FILE_TOOLS = [read_file, read_file_lines, write_file, list_files, run_shell]
 ALL_TOOLS = TOOLS + FILE_TOOLS
