@@ -100,6 +100,9 @@ async def planner_node(state: DevAgentState) -> dict:
         "current_read_files": first.get("read_files", []),
         "current_write_files": first.get("write_files", []),
         "messages": [],
+        "revision_count": 0,
+        "needs_revision": False,
+        "review_result": "",
     }
 
 
@@ -110,6 +113,8 @@ async def coder_node(state: DevAgentState) -> dict:
     tier = state.get("model_tier", "haiku")
     read_files = state.get("current_read_files", [])
     write_files = state.get("current_write_files", [])
+    revision_count = state.get("revision_count", 0)
+    review_result = state.get("review_result", "")
 
     file_hint = ""
     if read_files or write_files:
@@ -120,12 +125,21 @@ async def coder_node(state: DevAgentState) -> dict:
             f"list_files による探索は不要です。上記ファイルを直接 read_file してください。"
         )
 
-    print(f"[coder] model_tier={tier} ({_MODEL_IDS.get(tier)})")
+    revision_hint = ""
+    if revision_count > 0 and review_result:
+        revision_hint = (
+            f"\n\n【修正依頼（{revision_count}回目）】\n"
+            f"前回のレビュー結果:\n{review_result}\n\n"
+            f"上記の指摘事項を反映して修正してください。"
+        )
+
+    print(f"[coder] model_tier={tier} ({_MODEL_IDS.get(tier)}), revision_count={revision_count}")
     prompt = (
         f"あなたは自律開発エージェントのコーダーです。\n"
         f"ワークスペース: {workspace_root}\n\n"
         f"以下のタスクを実装してください:\n{task}"
-        f"{file_hint}\n\n"
+        f"{file_hint}"
+        f"{revision_hint}\n\n"
         f"read_file で対象ファイルを読み込んだ上で、"
         f"write_file で実装コードをファイルに書き込んでください。\n"
         f"実装後は run_shell でテストやビルドを実行して動作確認してください。"
@@ -136,11 +150,12 @@ async def coder_node(state: DevAgentState) -> dict:
 
 
 async def reviewer_node(state: DevAgentState) -> dict:
-    """実装コードをレビューし結果をファイルに書き出す"""
+    """実装コードをレビューし、PASS/FAIL判定と修正要否をstateに返す"""
     task = state.get("current_task", "")
     workspace_root = state.get("workspace_root", "")
     tier = _lower_tier(state.get("model_tier", "haiku"))  # レビューは1段階下
     write_files = state.get("current_write_files", [])
+    revision_count = state.get("revision_count", 0)
 
     file_hint = ""
     if write_files:
@@ -150,19 +165,89 @@ async def reviewer_node(state: DevAgentState) -> dict:
             f"list_files による探索は不要です。上記ファイルを直接 read_file してください。"
         )
 
-    print(f"[reviewer] model_tier={tier} ({_MODEL_IDS.get(tier)})")
+    print(f"[reviewer] model_tier={tier} ({_MODEL_IDS.get(tier)}), revision_count={revision_count}")
     prompt = (
         f"あなたは自律開発エージェントのレビュアーです。\n"
         f"ワークスペース: {workspace_root}\n\n"
         f"以下のタスクについて実装されたコードをレビューしてください:\n{task}"
         f"{file_hint}\n\n"
         f"read_file で実装ファイルを読み込んでレビューしてください。\n"
-        f"必要に応じて run_shell でテストを実行し、動作を確認してください。\n"
-        f"レビュー結果を write_file で `docs/review.md` に追記形式で書き出してください。"
+        f"必要に応じて run_shell でテストを実行し、動作を確認してください。\n\n"
+        f"レビュー基準:\n"
+        f"- コードがタスクの要件を満たしているか\n"
+        f"- 構文エラーや明らかなバグがないか\n"
+        f"- テストが通るか（該当する場合）\n\n"
+        f"最終的な出力は以下のJSON形式のみで返してください:\n"
+        f'{{"result": "PASS" or "FAIL", "needs_revision": true or false, "comment": "詳細なコメント"}}\n\n'
+        f"※ PASSの場合は needs_revision: false, FAILの場合は needs_revision: true としてください。\n"
+        f"※ コメントには具体的な修正点や良かった点を記載してください。"
     )
 
-    await _invoke_agent(prompt, tier)
-    return {"messages": []}
+    response = await _invoke_agent(prompt, tier)
+    
+    # JSONをパースして結果を取得
+    try:
+        start = response.find("{")
+        if start == -1:
+            raise ValueError("No JSON object found in response")
+        end = response.rfind("}") + 1
+        review_data = json.loads(response[start:end])
+        
+        result = review_data.get("result", "FAIL")
+        needs_revision = review_data.get("needs_revision", True)
+        comment = review_data.get("comment", response)
+        
+        print(f"[reviewer] result={result}, needs_revision={needs_revision}")
+        
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"[reviewer] JSONパースエラー: {e}")
+        print(f"[reviewer] 生レスポンス: {response[:200]}...")
+        # パース失敗時はFAILとして扱う
+        result = "FAIL"
+        needs_revision = True
+        comment = response
+
+    # レビュー結果をファイルに追記（Task 7実装までの暫定対応）
+    review_summary = (
+        f"\n## タスク: {task}\n"
+        f"**判定**: {result}\n"
+        f"**修正要否**: {'必要' if needs_revision else '不要'}\n"
+        f"**修正回数**: {revision_count}\n\n"
+        f"{comment}\n"
+        f"---\n"
+    )
+    review_path = os.path.join(workspace_root, "docs/review.md")
+    os.makedirs(os.path.dirname(review_path), exist_ok=True)
+    with open(review_path, "a", encoding="utf-8") as f:
+        f.write(review_summary)
+
+    return {
+        "review_result": comment,
+        "needs_revision": needs_revision and revision_count < 2,  # 最大2回まで
+        "messages": [],
+    }
+
+
+def should_revise(state: DevAgentState) -> Literal["coder", "running_check"]:
+    """修正が必要かつ修正回数が2回未満ならcoderに戻る、それ以外はrunning_checkへ"""
+    needs_revision = state.get("needs_revision", False)
+    revision_count = state.get("revision_count", 0)
+    
+    if needs_revision and revision_count < 2:
+        print(f"[should_revise] 修正ループへ (revision_count={revision_count})")
+        return "coder"
+    else:
+        if revision_count >= 2:
+            print(f"[should_revise] 最大修正回数到達、次のタスクへ")
+        else:
+            print(f"[should_revise] レビューPASS、次のタスクへ")
+        return "running_check"
+
+
+def revision_counter_node(state: DevAgentState) -> dict:
+    """修正カウンターをインクリメント"""
+    revision_count = state.get("revision_count", 0)
+    return {"revision_count": revision_count + 1}
 
 
 def running_check_node(state: DevAgentState) -> dict:
@@ -180,6 +265,9 @@ def running_check_node(state: DevAgentState) -> dict:
         "current_read_files": next_item.get("read_files", []) if isinstance(next_item, dict) else [],
         "current_write_files": next_item.get("write_files", []) if isinstance(next_item, dict) else [],
         "is_running": is_running,
+        "revision_count": 0,  # 次のタスクのためにリセット
+        "needs_revision": False,
+        "review_result": "",
     }
 
 
@@ -195,12 +283,17 @@ _builder = StateGraph(DevAgentState)
 _builder.add_node("planner", planner_node)
 _builder.add_node("coder", coder_node)
 _builder.add_node("reviewer", reviewer_node)
+_builder.add_node("revision_counter", revision_counter_node)
 _builder.add_node("running_check", running_check_node)
 
 _builder.add_edge(START, "planner")
 _builder.add_edge("planner", "coder")
 _builder.add_edge("coder", "reviewer")
-_builder.add_edge("reviewer", "running_check")
+_builder.add_conditional_edges("reviewer", should_revise, {
+    "coder": "revision_counter",
+    "running_check": "running_check"
+})
+_builder.add_edge("revision_counter", "coder")
 _builder.add_conditional_edges("running_check", should_continue_dev)
 
 dev_graph = _builder.compile()
@@ -218,6 +311,9 @@ async def run_dev_agent(workspace_root: str, model_tier: str = "haiku", plan_pat
         "current_write_files": [],
         "is_running": True,
         "messages": [],
+        "revision_count": 0,
+        "needs_revision": False,
+        "review_result": "",
     })
     remaining = len(result.get("task_list", []))
     return f"✅ 自律開発完了（残タスク: {remaining} 件、使用ティア: {model_tier}）"
