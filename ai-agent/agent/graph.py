@@ -95,9 +95,21 @@ def route_after_trigger(state: AgentState) -> Literal["notify_start", "notify_st
     return "agent"
 
 
-def notify_start(state: AgentState) -> dict:
-    """走行開始トリガーを記録する（VS Code側への通知口）"""
+async def notify_start(state: AgentState) -> dict:
+    """走行開始トリガーを記録し、自律開発エージェントを起動する"""
+    import asyncio
     set_is_running(True)
+    workspace_root = state.get("workspace_root", "")
+
+    # 自律開発エージェントをバックグラウンドで起動
+    if workspace_root:
+        try:
+            from agent.dev_graph import run_dev_agent
+            asyncio.create_task(run_dev_agent(workspace_root))
+            print(f"[notify_start] 自律開発エージェント起動: {workspace_root}")
+        except Exception as e:
+            print(f"[notify_start] エージェント起動エラー: {e}")
+
     return {"agent_response": "🏃 走行開始を検知しました。AIエージェントを起動します。"}
 
 

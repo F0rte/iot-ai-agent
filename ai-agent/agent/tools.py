@@ -147,5 +147,57 @@ def list_files(directory: str = ".") -> str:
     return "\n".join(entries) if entries else "（ファイルなし）"
 
 
-FILE_TOOLS = [read_file, write_file, list_files]
+@tool
+def run_shell(command: str, cwd: str = ".") -> str:
+    """ワークスペース内でシェルコマンドを実行する。
+
+    Args:
+        command: 実行するコマンド（例: "uv run python test.py", "npm test"）
+        cwd: 実行ディレクトリ（ワークスペースルートからの相対パス、デフォルト: ルート）
+    """
+    import subprocess
+
+    full_cwd = _resolve(cwd)
+
+    # セキュリティ: ワークスペース外へのアクセスを防止
+    if _workspace_root and not full_cwd.startswith(_workspace_root):
+        return f"エラー: ワークスペース外のディレクトリ: {cwd}"
+
+    # セキュリティ: 危険なコマンドをブロック
+    dangerous_patterns = [
+        "rm -rf /",
+        "sudo ",
+        "mkfs",
+        "> /dev/",
+        "dd if=",
+        ":(){ :|:& };:",  # fork bomb
+    ]
+    if any(pattern in command for pattern in dangerous_patterns):
+        return f"エラー: 危険なコマンドが検出されました: {command[:50]}"
+
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,
+            cwd=full_cwd,
+            capture_output=True,
+            text=True,
+            timeout=60,  # 60秒タイムアウト
+        )
+
+        output = f"=== コマンド ===\n{command}\n\n"
+        output += f"=== stdout ===\n{result.stdout}\n"
+        if result.stderr:
+            output += f"\n=== stderr ===\n{result.stderr}\n"
+        output += f"\n終了コード: {result.returncode}"
+
+        return output
+
+    except subprocess.TimeoutExpired:
+        return f"エラー: コマンドがタイムアウトしました（60秒）: {command}"
+    except Exception as e:
+        return f"エラー: コマンド実行失敗: {e}"
+
+
+FILE_TOOLS = [read_file, write_file, list_files, run_shell]
 ALL_TOOLS = TOOLS + FILE_TOOLS

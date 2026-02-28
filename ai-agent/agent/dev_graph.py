@@ -51,9 +51,13 @@ async def planner_node(state: DevAgentState) -> dict:
     # JSONリストをパース
     try:
         start = response.find("[")
+        if start == -1:
+            raise ValueError("No JSON array found in response")
         end = response.rfind("]") + 1
         task_list = json.loads(response[start:end])
-    except Exception:
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"[planner] JSONパースエラー: {e}")
+        print(f"[planner] 生レスポンス: {response[:200]}...")
         task_list = [response.strip()]
 
     return {
@@ -74,7 +78,8 @@ async def coder_node(state: DevAgentState) -> dict:
         f"以下のタスクを実装してください:\n{task}\n\n"
         f"必要に応じて list_files でプロジェクト構造を確認し、"
         f"read_file で既存コードを読み込んだ上で、"
-        f"write_file で実装コードをファイルに書き込んでください。"
+        f"write_file で実装コードをファイルに書き込んでください。\n"
+        f"実装後は run_shell でテストやビルドを実行して動作確認してください。"
     )
 
     response = await _invoke_agent(prompt)
@@ -91,6 +96,7 @@ async def reviewer_node(state: DevAgentState) -> dict:
         f"ワークスペース: {workspace_root}\n\n"
         f"以下のタスクについて実装されたコードをレビューしてください:\n{task}\n\n"
         f"list_files でファイル一覧を確認し、read_file で実装ファイルを読み込んでレビューしてください。\n"
+        f"必要に応じて run_shell でテストを実行し、動作を確認してください。\n"
         f"レビュー結果を write_file で `docs/review.md` に追記形式で書き出してください。"
     )
 
