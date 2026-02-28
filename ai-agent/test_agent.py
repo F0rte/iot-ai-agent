@@ -24,34 +24,37 @@ from agent.graph import graph
 async def test_with_mock_data():
     """モックデータでエージェントをテスト"""
 
-    # テストデータ1: 心拍センサーデータ
+    # テストデータ1: 静止状態（magnitude ≒ 9.8 m/s²）
     test_message_1 = {
-        "heart_rate": 82,
-        "heart_rate_variability": 45,
-        "timestamp": "2026-02-28T03:00:00Z"
+        "acceleration": {"x": 0.1, "y": 9.8, "z": 0.1},
+        "gyroscope": {"x": 0.1, "y": 0.1, "z": 0.1},
     }
 
-    # テストデータ2: 動作センサーデータ（IMU）
+    # テストデータ2: 走行中（magnitude > 12.0 m/s²）→ running_start
     test_message_2 = {
-        "acceleration": {
-            "x": 0.12,
-            "y": 9.81,
-            "z": -0.05
-        },
-        "gyroscope": {
-            "x": 12.5,
-            "y": -3.2,
-            "z": 0.8
-        },
+        "acceleration": {"x": 3.0, "y": 9.8, "z": 7.5},
+        "gyroscope": {"x": 12.5, "y": -3.2, "z": 0.8},
     }
 
-    # テストデータ3: 不明データ（genericノードへ）
+    # テストデータ3: 走行継続（none）
     test_message_3 = {
-        "message": "Hello from Apple Watch",
-        "battery": 72,
+        "acceleration": {"x": 2.5, "y": 9.8, "z": 8.0},
+        "gyroscope": {"x": 10.0, "y": -2.0, "z": 1.0},
     }
 
-    test_messages = [test_message_1, test_message_2, test_message_3]
+    # テストデータ4: 静止に戻る → running_stop
+    test_message_4 = {
+        "acceleration": {"x": 0.1, "y": 9.8, "z": 0.2},
+        "gyroscope": {"x": 0.1, "y": 0.1, "z": 0.1},
+    }
+
+    # テストデータ5: 心拍センサーデータ（triggerには関係しない）
+    test_message_5 = {
+        "heart_rate": 145,
+        "heart_rate_variability": 30,
+    }
+
+    test_messages = [test_message_1, test_message_2, test_message_3, test_message_4, test_message_5]
 
     for i, msg in enumerate(test_messages, 1):
         print(f"\n{'='*60}")
@@ -62,8 +65,15 @@ async def test_with_mock_data():
 
         try:
             print(f"\n⏳ エージェント処理中...")
-            result = await graph.ainvoke({"iot_message": msg, "agent_response": "", "sensor_type": ""})
+            result = await graph.ainvoke({
+                "iot_message": msg,
+                "agent_response": "",
+                "sensor_type": "",
+                "trigger": "none",
+                "messages": [],
+            })
             print(f"\n🔍 センサー種別: {result['sensor_type']}")
+            print(f"🎯 トリガー: {result['trigger']}")
             print(f"\n🤖 エージェント応答:")
             print(result["agent_response"])
 

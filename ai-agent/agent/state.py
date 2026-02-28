@@ -7,4 +7,5 @@ class AgentState(TypedDict):
     iot_message: dict
     agent_response: str
     sensor_type: str
+    trigger: str  # "running_start" | "running_stop" | "none"
     messages: Annotated[list[BaseMessage], add_messages]

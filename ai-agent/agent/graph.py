@@ -1,4 +1,5 @@
 import json
+import math
 import os
 from typing import Literal
 
@@ -18,6 +19,12 @@ _llm_with_tools = _llm.bind_tools(TOOLS)
 
 _HEART_RATE_KEYS = {"heart_rate", "bpm", "heartRate", "heart_rate_variability", "hrv"}
 _MOTION_KEYS = {"acceleration", "gyroscope", "steps", "motion", "accelerometer"}
+
+# 走行判定の加速度閾値（m/s²）。静止時 ≒ 9.8、走行時は上下動で 12.0 以上になりやすい
+_RUNNING_THRESHOLD = 12.0
+
+# 走行状態のインメモリ記録（前回の状態を保持）
+_prev_running: bool = False
 
 _SENSOR_PROMPTS = {
     "heart_rate": (
@@ -49,6 +56,55 @@ def classify(state: AgentState) -> dict:
         return {"sensor_type": "unknown"}
 
 
+def route_after_classify(state: AgentState) -> Literal["trigger_check", "agent"]:
+    """motionのみtrigger_checkへ、それ以外はagentへ"""
+    if state["sensor_type"] == "motion":
+        return "trigger_check"
+    return "agent"
+
+
+def trigger_check(state: AgentState) -> dict:
+    """加速度の合成値から走行状態を判定し、状態遷移でtriggerを決定する"""
+    global _prev_running
+    msg = state["iot_message"]
+    acc = msg.get("acceleration", {})
+    x = acc.get("x", 0.0)
+    y = acc.get("y", 0.0)
+    z = acc.get("z", 0.0)
+    magnitude = math.sqrt(x ** 2 + y ** 2 + z ** 2)
+
+    is_running = magnitude >= _RUNNING_THRESHOLD
+
+    if is_running and not _prev_running:
+        trigger = "running_start"
+    elif not is_running and _prev_running:
+        trigger = "running_stop"
+    else:
+        trigger = "none"
+
+    _prev_running = is_running
+    return {"trigger": trigger}
+
+
+def route_after_trigger(state: AgentState) -> Literal["notify_start", "notify_stop", "agent"]:
+    trigger = state.get("trigger", "none")
+    if trigger == "running_start":
+        return "notify_start"
+    elif trigger == "running_stop":
+        return "notify_stop"
+    return "agent"
+
+
+def notify_start(state: AgentState) -> dict:
+    """走行開始トリガーを記録する（VS Code側への通知口）"""
+    return {"agent_response": "🏃 走行開始を検知しました。AIエージェントを起動します。"}
+
+
+def notify_stop(state: AgentState) -> dict:
+    """走行終了トリガーを記録する（VS Code側への通知口）"""
+    return {"agent_response": "🛑 走行終了を検知しました。AIエージェントを停止します。"}
+
+
 async def agent_node(state: AgentState) -> dict:
     """センサー種別に応じたプロンプトでツール付きLLMを呼び出す"""
     sensor_type = state.get("sensor_type", "unknown")
@@ -56,7 +112,6 @@ async def agent_node(state: AgentState) -> dict:
     msg = state["iot_message"]
 
     messages = state.get("messages") or []
-    # 最初のメッセージのみユーザープロンプトを追加
     if not messages:
         user_content = (
             f"{system_prompt}\n\n"
@@ -66,7 +121,6 @@ async def agent_node(state: AgentState) -> dict:
 
     response = await _llm_with_tools.ainvoke(messages)
 
-    # ツール呼び出しがない場合は最終応答として確定
     agent_response = state.get("agent_response", "")
     if not response.tool_calls:
         agent_response = response.content
@@ -85,11 +139,17 @@ def should_continue(state: AgentState) -> Literal["tools", "__end__"]:
 # グラフ構築
 _builder = StateGraph(AgentState)
 _builder.add_node("classify", classify)
+_builder.add_node("trigger_check", trigger_check)
+_builder.add_node("notify_start", notify_start)
+_builder.add_node("notify_stop", notify_stop)
 _builder.add_node("agent", agent_node)
 _builder.add_node("tools", ToolNode(TOOLS))
 
 _builder.add_edge(START, "classify")
-_builder.add_edge("classify", "agent")
+_builder.add_conditional_edges("classify", route_after_classify)
+_builder.add_conditional_edges("trigger_check", route_after_trigger)
+_builder.add_edge("notify_start", END)
+_builder.add_edge("notify_stop", END)
 _builder.add_conditional_edges("agent", should_continue)
 _builder.add_edge("tools", "agent")
 
@@ -101,6 +161,7 @@ async def run_agent(iot_message: dict) -> str:
         "iot_message": iot_message,
         "agent_response": "",
         "sensor_type": "",
+        "trigger": "none",
         "messages": [],
     })
     return result["agent_response"]
