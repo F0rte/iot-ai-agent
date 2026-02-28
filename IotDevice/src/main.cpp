@@ -12,6 +12,7 @@
 #include <Update.h>
 #include <Preferences.h>
 #include <Wire.h>
+#include <time.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 #include <PubSubClient.h>
@@ -20,6 +21,7 @@
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
+#include <esp32-hal-rgb-led.h>
 
 // =============================================================================
 // Constants & Configuration
@@ -39,9 +41,11 @@
 #define MPU6050_SCL_PIN 11
 #define SENSOR_SEND_INTERVAL_MS 10000
 #define SENSOR_ERROR_NOTIFY_INTERVAL_MS 1000
+#define ACCEL_BUFFER_SIZE 10
 
-// LED
-#define LED_PIN 7
+// Status LED (ESP32-S3 Super Mini compatibility)
+#define STATUS_LED_GPIO_PIN 47
+#define STATUS_LED_RGB_PIN 48
 
 // NVS Namespace
 const char *NVS_WIFI_NS = "wifi";
@@ -67,7 +71,7 @@ const char *NVS_SYSCFG_NS = "syscfg";
 #define AWS_IOT_ENDPOINT "a12vyeza8y4zmz-ats.iot.ap-northeast-1.amazonaws.com"
 #define AWS_IOT_PORT 8883
 #define AWS_IOT_TOPIC "hackathon/run/test"
-#define AWS_PUBLISH_INTERVAL_MS 10000
+#define AWS_PUBLISH_INTERVAL_MS 5000
 #define SENSOR_SAMPLE_INTERVAL_MS 500
 
 const char AWS_ROOT_CA[] PROGMEM = R"EOF(
@@ -196,6 +200,22 @@ bool ota_in_progress = false;
 bool ota_finalize_requested = false;
 bool ota_abort_requested = false;
 
+void status_led_init()
+{
+    pinMode(STATUS_LED_GPIO_PIN, OUTPUT);
+    digitalWrite(STATUS_LED_GPIO_PIN, HIGH);
+    neopixelWrite(STATUS_LED_RGB_PIN, 0, 0, 0);
+}
+
+void status_led_blink_aws()
+{
+    digitalWrite(STATUS_LED_GPIO_PIN, LOW);
+    neopixelWrite(STATUS_LED_RGB_PIN, 0, 24, 0);
+    delay(120);
+    digitalWrite(STATUS_LED_GPIO_PIN, HIGH);
+    neopixelWrite(STATUS_LED_RGB_PIN, 0, 0, 0);
+}
+
 bool ble_device_connected = false;
 
 Adafruit_MPU6050 mpu;
@@ -212,6 +232,10 @@ String last_activity_status = "None";
 bool has_last_activity_status = false;
 char aws_client_id[48] = {0};
 
+// Acceleration buffer for averaging (10 samples every 0.5s = 5 seconds)
+float accel_magnitude_buffer[ACCEL_BUFFER_SIZE] = {0.0f};
+int accel_buffer_index = 0;
+
 const unsigned long AWS_RECONNECT_INTERVAL_MS = 5000;
 
 const char *activity_status_from_magnitude(float accel_magnitude)
@@ -221,7 +245,7 @@ const char *activity_status_from_magnitude(float accel_magnitude)
         return "Run";
     }
 
-    if (accel_magnitude > 15.0f)
+    if (accel_magnitude > 20.0f)
     {
         return "Walk";
     }
@@ -365,10 +389,16 @@ bool aws_iot_publish_sensor(float accel_magnitude, const char *status, bool stat
         return false;
     }
 
+    // Get current time in ISO 8601 format
+    time_t now = time(nullptr);
+    struct tm *timeinfo = gmtime(&now);
+    char iso8601[32];
+    strftime(iso8601, sizeof(iso8601), "%Y-%m-%dT%H:%M:%SZ", timeinfo);
+
     JsonDocument doc;
-    doc["is_running"] = strcmp(status, "None") != 0;
-    doc["bpm"] = accel_magnitude;
     doc["status"] = status;
+    doc["bpm"] = accel_magnitude;
+    doc["timestamp"] = iso8601;
     doc["device_id"] = g_state.device_name;
 
     char payload[256];
@@ -1141,9 +1171,8 @@ void setup()
     log_println("[Setup] Initializing WiFi...");
     wifi_mgr_init();
 
-    // Setup LED pin
-    pinMode(LED_PIN, OUTPUT);
-    digitalWrite(LED_PIN, LOW);
+    // Setup status LED
+    status_led_init();
 
     log_println("[Setup] Initializing MPU6050...");
     mpu_initialized = sensor_init_mpu6050();
@@ -1320,7 +1349,7 @@ void loop()
         }
     }
 
-    // Send acceleration data to AWS (every 10 sec and status change), and BLE every 10 sec
+    // Sample acceleration data every 0.5 sec, calculate average over 5 sec, and send to AWS every 5 sec
     static unsigned long last_sensor_sample = 0;
     static unsigned long last_sensor_send = 0;
     static unsigned long last_sensor_error_notify = 0;
@@ -1335,22 +1364,32 @@ void loop()
         mpu.getEvent(&accel, &gyro, &temp);
 
         float accel_magnitude = fabs(accel.acceleration.x) + fabs(accel.acceleration.y) + fabs(accel.acceleration.z);
-        const char *current_status = activity_status_from_magnitude(accel_magnitude);
 
-        bool status_changed = !has_last_activity_status || (last_activity_status != current_status);
+        // Store magnitude in circular buffer
+        accel_magnitude_buffer[accel_buffer_index] = accel_magnitude;
+        accel_buffer_index = (accel_buffer_index + 1) % ACCEL_BUFFER_SIZE;
+
+        // Calculate average of all samples in buffer
+        float avg_accel_magnitude = 0.0f;
+        for (int i = 0; i < ACCEL_BUFFER_SIZE; i++)
+        {
+            avg_accel_magnitude += accel_magnitude_buffer[i];
+        }
+        avg_accel_magnitude /= ACCEL_BUFFER_SIZE;
+
+        const char *current_status = activity_status_from_magnitude(avg_accel_magnitude);
+
         bool interval_due = millis() - last_aws_publish_time >= AWS_PUBLISH_INTERVAL_MS;
 
-        if ((status_changed || interval_due) && aws_mqtt_client.connected())
+        if (interval_due && aws_mqtt_client.connected())
         {
-            if (aws_iot_publish_sensor(accel_magnitude, current_status, status_changed))
+            if (aws_iot_publish_sensor(avg_accel_magnitude, current_status, false))
             {
                 last_aws_publish_time = millis();
                 last_activity_status = current_status;
                 has_last_activity_status = true;
 
-                digitalWrite(LED_PIN, HIGH);
-                delay(10);
-                digitalWrite(LED_PIN, LOW);
+                status_led_blink_aws();
             }
         }
 
@@ -1358,15 +1397,19 @@ void loop()
         {
             last_sensor_send = millis();
 
-            char csv[64];
-            snprintf(csv, sizeof(csv), "%.3f", accel_magnitude);
+            // Calculate average for BLE send
+            float avg_accel_magnitude = 0.0f;
+            for (int i = 0; i < ACCEL_BUFFER_SIZE; i++)
+            {
+                avg_accel_magnitude += accel_magnitude_buffer[i];
+            }
+            avg_accel_magnitude /= ACCEL_BUFFER_SIZE;
 
-            // Blink LED when sending acceleration data
-            digitalWrite(LED_PIN, HIGH);
+            char csv[64];
+            snprintf(csv, sizeof(csv), "%.3f", avg_accel_magnitude);
+
             pDebugLogTx->setValue((uint8_t *)csv, strlen(csv));
             pDebugLogTx->notify();
-            delay(10);
-            digitalWrite(LED_PIN, LOW);
         }
     }
     else if (!mpu_initialized && ble_device_connected && pDebugLogTx)
