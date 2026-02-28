@@ -18,27 +18,21 @@ from dotenv import load_dotenv
 # 環境変数をロード
 load_dotenv()
 
-from agent.graph import run_agent
+from agent.graph import graph
 
 
 async def test_with_mock_data():
     """モックデータでエージェントをテスト"""
 
-    # テストデータ1: シンプルなメッセージ
+    # テストデータ1: 心拍センサーデータ
     test_message_1 = {
-        "message": "Hello from test script",
-        "test_id": 1
+        "heart_rate": 82,
+        "heart_rate_variability": 45,
+        "timestamp": "2026-02-28T03:00:00Z"
     }
 
-    # テストデータ2: 数値データ
+    # テストデータ2: 動作センサーデータ（IMU）
     test_message_2 = {
-        "temperature": 25.5,
-        "humidity": 60,
-        "test_id": 2
-    }
-
-    # テストデータ3: IMUセンサー風データ（将来用）
-    test_message_3 = {
         "acceleration": {
             "x": 0.12,
             "y": 9.81,
@@ -49,7 +43,12 @@ async def test_with_mock_data():
             "y": -3.2,
             "z": 0.8
         },
-        "test_id": 3
+    }
+
+    # テストデータ3: 不明データ（genericノードへ）
+    test_message_3 = {
+        "message": "Hello from Apple Watch",
+        "battery": 72,
     }
 
     test_messages = [test_message_1, test_message_2, test_message_3]
@@ -63,9 +62,10 @@ async def test_with_mock_data():
 
         try:
             print(f"\n⏳ エージェント処理中...")
-            response = await run_agent(msg)
+            result = await graph.ainvoke({"iot_message": msg, "agent_response": "", "sensor_type": ""})
+            print(f"\n🔍 センサー種別: {result['sensor_type']}")
             print(f"\n🤖 エージェント応答:")
-            print(response)
+            print(result["agent_response"])
 
         except Exception as e:
             print(f"\n❌ エラー発生: {e}")
