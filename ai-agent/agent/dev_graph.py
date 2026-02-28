@@ -24,6 +24,9 @@ _MODEL_IDS = {
 }
 _TIER_ORDER = ["haiku", "sonnet", "opus"]
 
+# 実行計画専用ファイルパス
+# 注: .github/docs/tasks.md は人間向けの設計・方針ドキュメント
+# docs/plan.md はエージェントに渡す「次にやること」を自然言語で記述する実行計画専用
 _PLAN_PATH = "docs/plan.md"
 
 
@@ -62,6 +65,7 @@ async def planner_node(state: DevAgentState) -> dict:
         f"ワークスペース: {workspace_root}\n\n"
         f"手順:\n"
         f"1. `{_PLAN_PATH}` を read_file で読み込む（ユーザーが自然言語で書いた要件・やりたいことが記載されている）\n"
+        f"   注: このファイルは実行計画専用で、エージェントが実装すべき次のタスクが記述されています\n"
         f"2. list_files でプロジェクト構造を把握し、必要に応じて既存コードを read_file で確認する\n"
         f"3. 要件を実装可能な具体的タスクに分解する。各タスクは独立して実装できる単位にすること\n\n"
         f"最終的な出力は以下のJSON形式のみで返してください（余分な説明不要）:\n"
