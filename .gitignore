@@ -7,8 +7,20 @@
 # Mac OS
 .DS_Store
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+.pytest_cache/
+
 # Node.js
 node_modules/
+vscode-extension/out/
+*.vsix
 
 # Swift App
 build/

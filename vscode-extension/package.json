@@ -1,22 +1,31 @@
 {
-  "name": "vscode-extension",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "agent-controller",
+  "displayName": "Agent Controller",
+  "description": "IoT AI Agent Controller for VSCode",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "main": "./out/extension.js",
+  "activationEvents": ["onCommand:agentController.openPanel"],
+  "contributes": {
+    "commands": [
+      {
+        "command": "agentController.openPanel",
+        "title": "AgentController: Open Panel"
+      }
+    ]
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
-    "aws-iot-device-sdk-v2": "^1.25.0",
-    "dotenv": "^17.3.1"
-  },
   "devDependencies": {
     "@types/node": "^25.3.2",
-    "ts-node": "^10.9.2",
+    "@types/vscode": "^1.85.0",
     "typescript": "^5.9.3"
   }
 }
