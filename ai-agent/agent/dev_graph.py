@@ -41,11 +41,11 @@ def _lower_tier(tier: str) -> str:
     return _TIER_ORDER[max(0, idx - 1)]
 
 
-async def _invoke_agent(prompt: str, tier: str) -> str:
+async def _invoke_agent(prompt: str, tier: str, max_iterations: int = 20) -> str:
     """単一ターンのエージェント呼び出し（ツールループ付き）"""
     llm_with_tools = _get_llm(tier).bind_tools(FILE_TOOLS)
     messages = [HumanMessage(content=prompt)]
-    while True:
+    for i in range(max_iterations):
         response = await llm_with_tools.ainvoke(messages)
         messages.append(response)
         if not response.tool_calls:
@@ -53,6 +53,8 @@ async def _invoke_agent(prompt: str, tier: str) -> str:
         tool_node = ToolNode(FILE_TOOLS)
         tool_result = await tool_node.ainvoke({"messages": messages})
         messages = messages + tool_result["messages"]
+    print(f"[agent] 最大イテレーション数({max_iterations})に達しました")
+    return messages[-1].content if messages else ""
 
 
 async def planner_node(state: DevAgentState) -> dict:
@@ -94,6 +96,19 @@ async def planner_node(state: DevAgentState) -> dict:
         task_list = [{"task": response.strip(), "read_files": [], "write_files": []}]
 
     first = task_list[0] if task_list else {}
+    if not task_list:
+        print("[planner] タスクリストが空です。終了します。")
+        return {
+            "task_list": [],
+            "current_task": "",
+            "current_read_files": [],
+            "current_write_files": [],
+            "messages": [],
+            "revision_count": 0,
+            "needs_revision": False,
+            "review_result": "",
+            "is_running": False,  # タスクなしで終了
+        }
     return {
         "task_list": task_list,
         "current_task": first.get("task", ""),
