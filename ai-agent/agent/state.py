@@ -9,3 +9,4 @@ class AgentState(TypedDict):
     sensor_type: str
     trigger: str  # "running_start" | "running_stop" | "none"
     messages: Annotated[list[BaseMessage], add_messages]
+    workspace_root: str  # ファイル操作の基準ディレクトリ

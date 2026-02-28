@@ -1,4 +1,5 @@
 from langchain_core.tools import tool
+import os
 
 # センサー種別ごとのインメモリ履歴
 _history: dict[str, list[dict]] = {}
@@ -14,6 +15,23 @@ _ANOMALY_THRESHOLDS: dict[str, dict[str, tuple[float, float]]] = {
         "acceleration_magnitude": (0.0, 20.0),
     },
 }
+
+# ファイル操作ツールが参照するワークスペースルート
+_workspace_root: str = ""
+
+
+def set_workspace_root(path: str) -> None:
+    global _workspace_root
+    _workspace_root = path
+
+
+def _resolve(path: str) -> str:
+    """相対パスをワークスペースルートからの絶対パスに変換する"""
+    if os.path.isabs(path):
+        return path
+    if not _workspace_root:
+        return path
+    return os.path.join(_workspace_root, path)
 
 
 @tool
@@ -64,3 +82,58 @@ def detect_anomaly(sensor_type: str, data: dict) -> str:
 
 
 TOOLS = [save_record, get_history, detect_anomaly]
+
+
+@tool
+def read_file(path: str) -> str:
+    """ワークスペース内のファイルを読み込む。
+
+    Args:
+        path: ワークスペースルートからの相対パス（例: docs/plan.md）
+    """
+    full_path = _resolve(path)
+    if not os.path.exists(full_path):
+        return f"エラー: ファイルが見つかりません: {path}"
+    with open(full_path, encoding="utf-8") as f:
+        return f.read()
+
+
+@tool
+def write_file(path: str, content: str) -> str:
+    """ワークスペース内のファイルを書き込む（新規作成・上書き）。
+
+    Args:
+        path: ワークスペースルートからの相対パス（例: src/main.py）
+        content: 書き込む内容
+    """
+    full_path = _resolve(path)
+    os.makedirs(os.path.dirname(full_path), exist_ok=True) if os.path.dirname(full_path) else None
+    with open(full_path, "w", encoding="utf-8") as f:
+        f.write(content)
+    return f"✅ ファイルを書き込みました: {path}"
+
+
+@tool
+def list_files(directory: str = ".") -> str:
+    """ワークスペース内のディレクトリのファイル一覧を取得する。
+
+    Args:
+        directory: ワークスペースルートからの相対パス（デフォルト: ワークスペースルート）
+    """
+    full_path = _resolve(directory)
+    if not os.path.exists(full_path):
+        return f"エラー: ディレクトリが見つかりません: {directory}"
+    entries = []
+    for root, dirs, files in os.walk(full_path):
+        # 隠しディレクトリ・__pycache__ をスキップ
+        dirs[:] = [d for d in dirs if not d.startswith(".") and d != "__pycache__"]
+        rel_root = os.path.relpath(root, full_path)
+        for file in files:
+            if not file.startswith("."):
+                entry = file if rel_root == "." else f"{rel_root}/{file}"
+                entries.append(entry)
+    return "\n".join(entries) if entries else "（ファイルなし）"
+
+
+FILE_TOOLS = [read_file, write_file, list_files]
+ALL_TOOLS = TOOLS + FILE_TOOLS

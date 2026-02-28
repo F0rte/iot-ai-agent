@@ -3,19 +3,19 @@ import math
 import os
 from typing import Literal
 
-from langchain_aws import ChatBedrock
+from langchain_aws import ChatBedrockConverse
 from langchain_core.messages import HumanMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 
 from agent.state import AgentState
-from agent.tools import TOOLS
+from agent.tools import ALL_TOOLS, set_workspace_root
 
-_llm = ChatBedrock(
-    model_id="anthropic.claude-3-haiku-20240307-v1:0",
+_llm = ChatBedrockConverse(
+    model="anthropic.claude-3-haiku-20240307-v1:0",
     region_name=os.environ.get("AWS_BEDROCK_REGION", os.environ.get("AWS_REGION", "us-east-1")),
 )
-_llm_with_tools = _llm.bind_tools(TOOLS)
+_llm_with_tools = _llm.bind_tools(ALL_TOOLS)
 
 _HEART_RATE_KEYS = {"heart_rate", "bpm", "heartRate", "heart_rate_variability", "hrv"}
 _MOTION_KEYS = {"acceleration", "gyroscope", "steps", "motion", "accelerometer"}
@@ -111,13 +111,18 @@ async def agent_node(state: AgentState) -> dict:
     system_prompt = _SENSOR_PROMPTS.get(sensor_type, _SENSOR_PROMPTS["unknown"])
     msg = state["iot_message"]
 
-    messages = state.get("messages") or []
-    if not messages:
+    existing_messages = state.get("messages") or []
+
+    if not existing_messages:
         user_content = (
             f"{system_prompt}\n\n"
             f"受信データ:\n{json.dumps(msg, ensure_ascii=False, indent=2)}"
         )
-        messages = [HumanMessage(content=user_content)]
+        initial_human = HumanMessage(content=user_content)
+        messages = [initial_human]
+    else:
+        # ツール実行後の再呼び出し: 既存メッセージをそのまま使用
+        messages = existing_messages
 
     response = await _llm_with_tools.ainvoke(messages)
 
@@ -125,7 +130,11 @@ async def agent_node(state: AgentState) -> dict:
     if not response.tool_calls:
         agent_response = response.content
 
-    return {"messages": [response], "agent_response": agent_response}
+    if not existing_messages:
+        # 初回: HumanMessageとAIMessageを両方stateに保存
+        return {"messages": [initial_human, response], "agent_response": agent_response}
+    else:
+        return {"messages": [response], "agent_response": agent_response}
 
 
 def should_continue(state: AgentState) -> Literal["tools", "__end__"]:
@@ -143,7 +152,7 @@ _builder.add_node("trigger_check", trigger_check)
 _builder.add_node("notify_start", notify_start)
 _builder.add_node("notify_stop", notify_stop)
 _builder.add_node("agent", agent_node)
-_builder.add_node("tools", ToolNode(TOOLS))
+_builder.add_node("tools", ToolNode(ALL_TOOLS))
 
 _builder.add_edge(START, "classify")
 _builder.add_conditional_edges("classify", route_after_classify)
@@ -156,12 +165,15 @@ _builder.add_edge("tools", "agent")
 graph = _builder.compile()
 
 
-async def run_agent(iot_message: dict) -> str:
+async def run_agent(iot_message: dict, workspace_root: str = "") -> str:
+    if workspace_root:
+        set_workspace_root(workspace_root)
     result = await graph.ainvoke({
         "iot_message": iot_message,
         "agent_response": "",
         "sensor_type": "",
         "trigger": "none",
         "messages": [],
+        "workspace_root": workspace_root,
     })
     return result["agent_response"]
