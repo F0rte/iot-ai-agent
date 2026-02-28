@@ -1,12 +1,16 @@
 import json
 import asyncio
+import os
 
-from langchain_anthropic import ChatAnthropic
+from langchain_aws import ChatBedrock
 from langgraph.graph import StateGraph, START, END
 
 from agent.state import AgentState
 
-_llm = ChatAnthropic(model="claude-3-haiku-20240307")
+_llm = ChatBedrock(
+    model_id="anthropic.claude-3-haiku-20240307-v1:0",
+    region_name=os.environ.get("AWS_BEDROCK_REGION", os.environ.get("AWS_REGION", "us-east-1")),
+)
 
 
 async def call_llm(state: AgentState) -> dict:
