@@ -23,3 +23,7 @@ class DevAgentState(TypedDict):
     current_write_files: list[str]  # 現在タスクで書くべきファイル一覧（plannerが特定）
     is_running: bool        # 走行中フラグ
     messages: list[BaseMessage]  # ノードごとにリセットして使用
+    review_result: str      # レビュー結果
+    needs_revision: bool    # 修正が必要かどうか
+    revision_count: int     # 修正回数
+    task_index: int         # 現在のタスクのインデックス

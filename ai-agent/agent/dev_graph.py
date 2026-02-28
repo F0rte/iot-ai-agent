@@ -140,13 +140,23 @@ async def reviewer_node(state: DevAgentState) -> dict:
     task = state.get("current_task", "")
     workspace_root = state.get("workspace_root", "")
     tier = _lower_tier(state.get("model_tier", "haiku"))  # レビューは1段階下
+    write_files = state.get("current_write_files", [])
+
+    file_hint = ""
+    if write_files:
+        file_hint = (
+            f"\n\n【ファイルヒント（plannerが特定済み）】\n"
+            f"レビュー対象ファイル: {write_files}\n"
+            f"list_files による探索は不要です。上記ファイルを直接 read_file してください。"
+        )
 
     print(f"[reviewer] model_tier={tier} ({_MODEL_IDS.get(tier)})")
     prompt = (
         f"あなたは自律開発エージェントのレビュアーです。\n"
         f"ワークスペース: {workspace_root}\n\n"
-        f"以下のタスクについて実装されたコードをレビューしてください:\n{task}\n\n"
-        f"list_files でファイル一覧を確認し、read_file で実装ファイルを読み込んでレビューしてください。\n"
+        f"以下のタスクについて実装されたコードをレビューしてください:\n{task}"
+        f"{file_hint}\n\n"
+        f"read_file で実装ファイルを読み込んでレビューしてください。\n"
         f"必要に応じて run_shell でテストを実行し、動作を確認してください。\n"
         f"レビュー結果を write_file で `docs/review.md` に追記形式で書き出してください。"
     )
