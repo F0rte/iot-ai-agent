@@ -1,5 +1,4 @@
 import json
-import math
 import os
 from typing import Literal
 
@@ -9,19 +8,13 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 
 from agent.state import AgentState
-from agent.tools import ALL_TOOLS, set_workspace_root, set_is_running
+from agent.tools import ALL_TOOLS, set_workspace_root, set_is_running, set_iot_status
 
 _llm = ChatBedrockConverse(
     model="us.anthropic.claude-haiku-4-5-20251001-v1:0",
     region_name=os.environ.get("AWS_BEDROCK_REGION", os.environ.get("AWS_REGION", "us-east-1")),
 )
 _llm_with_tools = _llm.bind_tools(ALL_TOOLS)
-
-_HEART_RATE_KEYS = {"heart_rate", "bpm", "heartRate", "heart_rate_variability", "hrv"}
-_MOTION_KEYS = {"acceleration", "gyroscope", "steps", "motion", "accelerometer"}
-
-# 走行判定の加速度閾値（m/s²）。静止時 ≒ 9.8、走行時は上下動で 12.0 以上になりやすい
-_RUNNING_THRESHOLD = 12.0
 
 # 走行状態のインメモリ記録（前回の状態を保持）
 _prev_running: bool = False
@@ -33,9 +26,11 @@ _SENSOR_PROMPTS = {
         "最終的にデータの状態を日本語で簡潔に説明してください。"
     ),
     "motion": (
-        "あなたはApple Watchの動作センサー（加速度・ジャイロスコープ）データを分析する専門AIです。"
+        "あなたはApple Watchの動作センサーデータを分析する専門AIです。"
+        "Statusフィールドには現在の活動状態（running, jogging, walking等）が記録されています。"
         "必要に応じて save_record でデータを保存してください。"
-        "最終的に動作・姿勢の状態を日本語で簡潔に説明してください。"
+        "Statusの値や他のセンサーデータ（bpm、acceleration等）を踏まえて、"
+        "現在の活動状態や運動強度を日本語で簡潔に説明してください。"
     ),
     "unknown": (
         "あなたはIoTデバイス（Apple Watch）のデータを分析するAIです。"
@@ -46,14 +41,11 @@ _SENSOR_PROMPTS = {
 
 
 def classify(state: AgentState) -> dict:
-    """センサー種別をルールベースで判定する"""
-    keys = set(state["iot_message"].keys())
-    if keys & _HEART_RATE_KEYS:
-        return {"sensor_type": "heart_rate"}
-    elif keys & _MOTION_KEYS:
+    """センサー種別をStatusキーの存在で判定する"""
+    msg = state["iot_message"]
+    if "Status" in msg:
         return {"sensor_type": "motion"}
-    else:
-        return {"sensor_type": "unknown"}
+    return {"sensor_type": "unknown"}
 
 
 def route_after_classify(state: AgentState) -> Literal["trigger_check", "agent"]:
@@ -64,16 +56,12 @@ def route_after_classify(state: AgentState) -> Literal["trigger_check", "agent"]
 
 
 def trigger_check(state: AgentState) -> dict:
-    """加速度の合成値から走行状態を判定し、状態遷移でtriggerとmodel_tierを決定する"""
+    """Statusフィールドで走行状態を判定し、状態遷移でtriggerとmodel_tierを決定する"""
     global _prev_running
     msg = state["iot_message"]
-    acc = msg.get("acceleration", {})
-    x = acc.get("x", 0.0)
-    y = acc.get("y", 0.0)
-    z = acc.get("z", 0.0)
-    magnitude = math.sqrt(x ** 2 + y ** 2 + z ** 2)
 
-    is_running = magnitude >= _RUNNING_THRESHOLD
+    status = msg.get("Status", "None")  # "Run" | "Walk" | "None"
+    is_running = status in ("Run", "Walk")
 
     if is_running and not _prev_running:
         trigger = "running_start"
@@ -84,13 +72,22 @@ def trigger_check(state: AgentState) -> dict:
 
     _prev_running = is_running
 
-    # 走行強度からモデルティアを決定
-    if magnitude >= 18.0:
-        model_tier = "opus"
-    elif magnitude >= _RUNNING_THRESHOLD:
+    # Run → sonnet (4.5), Walk → sonnet-3 (3.5), None → haiku
+    if status == "Run":
         model_tier = "sonnet"
+    elif status == "Walk":
+        model_tier = "sonnet-3"
     else:
         model_tier = "haiku"
+
+    device_id = msg.get("device_id", "motion_sensor")
+    set_iot_status(device_id, {
+        "status": status,
+        "is_running": is_running,
+        "trigger": trigger,
+        "model_tier": model_tier,
+        "timestamp": msg.get("timestamp"),
+    })
 
     return {"trigger": trigger, "model_tier": model_tier}
 

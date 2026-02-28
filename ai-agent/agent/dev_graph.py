@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import asyncio
 from typing import Literal
 
 from langchain_aws import ChatBedrockConverse
@@ -9,7 +10,8 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 
 from agent.state import DevAgentState
-from agent.tools import FILE_TOOLS, get_is_running, set_workspace_root
+from agent.tools import FILE_TOOLS, get_is_running, set_workspace_root, get_iot_status
+from api.events import broadcast
 
 _REGION = os.environ.get("AWS_BEDROCK_REGION", os.environ.get("AWS_REGION", "us-east-1"))
 
@@ -96,9 +98,26 @@ async def planner_node(state: DevAgentState) -> dict:
         print(f"[planner] 生レスポンス: {response[:200]}...")
         task_list = [{"task": response.strip(), "read_files": [], "write_files": []}]
 
+    # タスク一覧をブロードキャスト
+    if task_list:
+        print(f"[planner] タスク一覧をブロードキャストします（{len(task_list)} 件）")
+        await broadcast({
+            "type": "task_list",
+            "tasks": task_list,
+            "total_count": len(task_list),
+            "message": f"タスク分解完了: {len(task_list)} 件のタスクを生成しました"
+        })
+    else:
+        print("[planner] タスクリストが空です。終了します。")
+        await broadcast({
+            "type": "task_list",
+            "tasks": [],
+            "total_count": 0,
+            "message": "タスクが見つかりませんでした"
+        })
+
     first = task_list[0] if task_list else {}
     if not task_list:
-        print("[planner] タスクリストが空です。終了します。")
         return {
             "task_list": [],
             "current_task": "",
@@ -133,6 +152,9 @@ async def coder_node(state: DevAgentState) -> dict:
     write_files = state.get("current_write_files", [])
     revision_count = state.get("revision_count", 0)
     review_result = state.get("review_result", "")
+    task_index = state.get("task_index", 0)
+
+    await broadcast({"type": "task_status", "task_index": task_index, "status": "coding"})
 
     file_hint = ""
     if read_files or write_files:
@@ -185,6 +207,7 @@ async def reviewer_node(state: DevAgentState) -> dict:
         )
 
     print(f"[reviewer] model_tier={tier} ({_MODEL_IDS.get(tier)}), revision_count={revision_count}")
+    await broadcast({"type": "task_status", "task_index": task_index, "status": "reviewing"})
     prompt = (
         f"あなたは自律開発エージェントのレビュアーです。\n"
         f"ワークスペース: {workspace_root}\n\n"
@@ -243,9 +266,17 @@ async def reviewer_node(state: DevAgentState) -> dict:
     with open(review_path, "w", encoding="utf-8") as f:
         f.write(review_summary)
 
+    final_needs_revision = needs_revision and revision_count < 2
+    await broadcast({
+        "type": "task_status",
+        "task_index": task_index,
+        "status": "done" if not final_needs_revision else "revision",
+        "result": result,
+    })
+
     return {
         "review_result": comment,
-        "needs_revision": needs_revision and revision_count < 2,  # 最大2回まで
+        "needs_revision": final_needs_revision,
         "messages": [],
     }
 
@@ -272,8 +303,25 @@ def revision_counter_node(state: DevAgentState) -> dict:
     return {"revision_count": revision_count + 1}
 
 
-def running_check_node(state: DevAgentState) -> dict:
-    """走行中フラグを確認してstateを更新し、task_indexをインクリメントして返す"""
+async def running_check_node(state: DevAgentState) -> dict:
+    """IoTステータスを確認してから、走行中フラグを確認してstateを更新し、task_indexをインクリメントして返す"""
+    
+    # IoTステータスの確認（Noneの場合は5秒ごとに確認する無限ループ）
+    print("[running_check] IoTステータスの確認を開始...")
+    while True:
+        # 全デバイスのステータスを取得
+        iot_status = get_iot_status()
+        
+        if iot_status is None or len(iot_status) == 0:
+            print("[running_check] IoTステータスがNoneまたは空です。5秒待機してから再確認します...")
+            await asyncio.sleep(5)
+            continue
+        
+        # ステータスが取得できた場合
+        print(f"[running_check] IoTステータスを確認しました: {iot_status}")
+        break
+    
+    # 走行中フラグの確認
     is_running = state.get("is_running", True)
     task_list = list(state.get("task_list", []))
     task_index = state.get("task_index", 0)

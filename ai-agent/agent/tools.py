@@ -22,6 +22,9 @@ _workspace_root: str = ""
 # 走行中フラグ（notify_start/stop から更新、dev_graph から参照）
 _is_running: bool = False
 
+# IoTデバイスのステータス（デバイスID -> ステータス情報の辞書）
+_iot_status: dict[str, dict] = {}
+
 
 def set_workspace_root(path: str) -> None:
     global _workspace_root
@@ -35,6 +38,32 @@ def set_is_running(value: bool) -> None:
 
 def get_is_running() -> bool:
     return _is_running
+
+
+def set_iot_status(device_id: str, status: dict) -> None:
+    """IoTデバイスのステータスを設定する。
+    
+    Args:
+        device_id: デバイスID（例: "device_001", "sensor_heart_rate"）
+        status: ステータス情報（辞書形式）
+    """
+    global _iot_status
+    _iot_status[device_id] = status
+
+
+def get_iot_status(device_id: str | None = None) -> dict | None:
+    """IoTデバイスのステータスを取得する。
+    
+    Args:
+        device_id: デバイスID。Noneの場合は全デバイスのステータスを返す。
+    
+    Returns:
+        device_idが指定された場合は該当デバイスのステータス（存在しない場合はNone）
+        device_idがNoneの場合は全デバイスのステータス辞書
+    """
+    if device_id is None:
+        return _iot_status.copy()
+    return _iot_status.get(device_id)
 
 
 def _resolve(path: str) -> str:

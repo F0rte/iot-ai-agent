@@ -5,20 +5,25 @@ running_check_node 関数の task_index インクリメント機能をテスト�
 
 import sys
 import os
+import asyncio
 
 # パスを追加してモジュールをインポート
 sys.path.insert(0, os.path.dirname(__file__))
 
 from agent.dev_graph import running_check_node
 from agent.state import DevAgentState
+from agent.tools import set_iot_status
 
 
-def test_running_check_node_increments_task_index():
+async def test_running_check_node_increments_task_index():
     """running_check_node が task_index を正しくインクリメントすることを確認"""
     
     print("\n" + "="*60)
     print("🧪 running_check_node task_index インクリメントテスト")
     print("="*60 + "\n")
+    
+    # IoTステータスをモック設定（Noneにならないようにする）
+    set_iot_status("device_001", {"status": "active", "battery": 80})
     
     # テストケース1: task_index = 0 から始める
     print("📝 テストケース1: task_index = 0")
@@ -40,7 +45,7 @@ def test_running_check_node_increments_task_index():
         "task_index": 0,
     }
     
-    result1 = running_check_node(state1)
+    result1 = await running_check_node(state1)
     expected_task_index1 = 1
     actual_task_index1 = result1.get("task_index")
     
@@ -73,7 +78,7 @@ def test_running_check_node_increments_task_index():
         "task_index": 5,
     }
     
-    result2 = running_check_node(state2)
+    result2 = await running_check_node(state2)
     expected_task_index2 = 6
     actual_task_index2 = result2.get("task_index")
     
@@ -104,7 +109,7 @@ def test_running_check_node_increments_task_index():
         "task_index": 10,
     }
     
-    result3 = running_check_node(state3)
+    result3 = await running_check_node(state3)
     expected_task_index3 = 11
     actual_task_index3 = result3.get("task_index")
     
@@ -141,7 +146,7 @@ def test_running_check_node_increments_task_index():
     
     print("  初期 task_index: 0")
     for i in range(3):
-        result = running_check_node(state4)
+        result = await running_check_node(state4)
         task_index = result.get("task_index")
         print(f"  {i+1}回目実行後 task_index: {task_index}")
         
@@ -165,12 +170,15 @@ def test_running_check_node_increments_task_index():
     return True
 
 
-def test_other_state_values():
+async def test_other_state_values():
     """running_check_node が他のstate値を正しく設定することを確認"""
     
     print("\n" + "="*60)
     print("🧪 running_check_node その他の状態値テスト")
     print("="*60 + "\n")
+    
+    # IoTステータスをモック設定
+    set_iot_status("device_001", {"status": "active", "battery": 80})
     
     state = {
         "workspace_root": "/test",
@@ -190,7 +198,7 @@ def test_other_state_values():
         "task_index": 0,
     }
     
-    result = running_check_node(state)
+    result = await running_check_node(state)
     
     print("📋 状態値の検証:")
     
@@ -246,18 +254,84 @@ def test_other_state_values():
     return True
 
 
-def main():
+async def test_iot_status_waiting():
+    """IoTステータスがNoneの場合に待機することを確認"""
+    
+    print("\n" + "="*60)
+    print("🧪 running_check_node IoTステータス待機テスト")
+    print("="*60 + "\n")
+    
+    # 最初はIoTステータスをクリアしてNoneにする
+    from agent.tools import _iot_status
+    _iot_status.clear()
+    
+    print("📝 テストケース: IoTステータスがNoneから始まる場合")
+    
+    state = {
+        "workspace_root": "/test",
+        "model_tier": "haiku",
+        "task_list": [
+            {"task": "タスク1", "read_files": [], "write_files": []},
+        ],
+        "current_task": "タスク1",
+        "current_read_files": [],
+        "current_write_files": [],
+        "is_running": True,
+        "messages": [],
+        "review_result": "",
+        "needs_revision": False,
+        "revision_count": 0,
+        "task_index": 0,
+    }
+    
+    # 非同期タスクとして実行開始
+    task = asyncio.create_task(running_check_node(state))
+    
+    # 少し待機してから、IoTステータスを設定
+    print("  ⏳ 2秒待機...")
+    await asyncio.sleep(2)
+    
+    print("  📡 IoTステータスを設定")
+    set_iot_status("device_001", {"status": "active", "battery": 80})
+    
+    # タスクの完了を待つ（最大10秒）
+    try:
+        result = await asyncio.wait_for(task, timeout=10.0)
+        print(f"  ✅ running_check_node が正常に完了しました")
+        print(f"  task_index: {result.get('task_index')}")
+        
+        if result.get('task_index') == 1:
+            print("  ✅ テスト PASS")
+            return True
+        else:
+            print(f"  ❌ テスト FAIL: task_index が期待値と異なります")
+            return False
+            
+    except asyncio.TimeoutError:
+        print("  ❌ テスト FAIL: タイムアウトしました（IoTステータス待機が動作していない可能性）")
+        return False
+    except Exception as e:
+        print(f"  ❌ テスト FAIL: エラーが発生しました: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+async def main():
     """メイン実行関数"""
     print("\n🚀 running_check_node テストスイート\n")
     
     try:
         # task_index インクリメントテスト
-        success1 = test_running_check_node_increments_task_index()
+        success1 = await test_running_check_node_increments_task_index()
         
         # その他の状態値テスト
-        success2 = test_other_state_values()
+        success2 = await test_other_state_values()
         
-        if success1 and success2:
+        # IoTステータス待機テスト
+        success3 = await test_iot_status_waiting()
+        
+        if success1 and success2 and success3:
             print("\n🎉 すべてのテスト成功！")
             return 0
         else:
@@ -275,4 +349,4 @@ def main():
 
 
 if __name__ == "__main__":
-    exit(main())
+    exit(asyncio.run(main()))
