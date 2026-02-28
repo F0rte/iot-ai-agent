@@ -37,3 +37,7 @@ xcuserdata/
 *.xcworkspace/xcuserdata/
 *.xcodeproj/xcuserdata/
 *.xcscmblueprint
+
+# AI agent generated files
+agent_*.md
+agent_test_*

@@ -185,7 +185,9 @@ async def coder_node(state: DevAgentState) -> dict:
         f"{revision_hint}\n\n"
         f"read_file で対象ファイルを読み込んだ上で、"
         f"write_file で実装コードをファイルに書き込んでください。\n"
-        f"実装後は run_shell でテストやビルドを実行して動作確認してください。"
+        f"実装後は run_shell でテストやビルドを実行して動作確認してください。\n"
+        f"一時的なテストファイルは `agent_test_` で始まる名前にしてください。\n"
+        f"一時的なドキュメント・レポートファイルは `agent_` で始まる名前にしてください。"
     )
 
     await _invoke_agent(prompt, tier)
