@@ -132,7 +132,7 @@ async def reviewer_node(state: DevAgentState) -> dict:
 
 def running_check_node(state: DevAgentState) -> dict:
     """走行中フラグを確認してstateを更新する"""
-    is_running = get_is_running()
+    is_running = state.get("is_running", True)
     task_list = list(state.get("task_list", []))
 
     if task_list:
