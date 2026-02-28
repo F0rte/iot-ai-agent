@@ -56,9 +56,12 @@ async def planner_node(state: DevAgentState) -> dict:
     prompt = (
         f"あなたは自律開発エージェントのプランナーです。\n"
         f"ワークスペース: {workspace_root}\n\n"
-        f"まず `{_PLAN_PATH}` を read_file で読み込み、実装すべきタスクをリストアップしてください。\n"
+        f"手順:\n"
+        f"1. `{_PLAN_PATH}` を read_file で読み込む（ユーザーが自然言語で書いた要件・やりたいことが記載されている）\n"
+        f"2. list_files でプロジェクト構造を把握し、必要に応じて既存コードを read_file で確認する\n"
+        f"3. 要件を実装可能な具体的タスクに分解する。各タスクは独立して実装できる単位にすること\n\n"
         f"最終的な出力は以下のJSON形式のみで返してください（余分な説明不要）:\n"
-        f'[\"タスク1\", \"タスク2\", \"タスク3\"]'
+        f'[\"タスク1の具体的な実装内容\", \"タスク2の具体的な実装内容\", ...]'
     )
 
     print(f"[planner] model_tier={tier} ({_MODEL_IDS.get(tier)})")

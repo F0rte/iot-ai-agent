@@ -44,12 +44,53 @@ uv run python test_agent.py
 
 `docs/plan.md` を用意すれば、IoTトリガーなしに自律開発を試せます。
 
+**1. `docs/plan.md` を作成する**
+
+plannerが読むファイル。**実現したいことを自然言語で自由に記述するだけでOKです。**  
+AIが既存コードを読んだ上で、具体的なタスクに分解します。
+
+```markdown
+# やりたいこと
+
+ユーザー認証機能を追加したい。
+JWTベースで、ログイン・ログアウト・トークンリフレッシュが必要。
+パスワードは bcrypt でハッシュ化すること。
+```
+
+**2. スクリプトから実行する**
+
 ```python
 import asyncio
 from agent.dev_graph import run_dev_agent
 
-asyncio.run(run_dev_agent(workspace_root="/path/to/your/project"))
+asyncio.run(run_dev_agent(
+    workspace_root="/path/to/your/project",  # プロジェクトのルートパス
+    model_tier="sonnet",                     # 使用するモデルティア（省略時: "haiku"）
+))
 ```
+
+または `uv run` で直接実行：
+
+```bash
+uv run python -c "
+import asyncio
+from agent.dev_graph import run_dev_agent
+asyncio.run(run_dev_agent('/path/to/your/project', model_tier='sonnet'))
+"
+```
+
+#### モデルティアの指定
+
+`model_tier` パラメータで使用モデルを制御できます。
+
+| `model_tier` | planner / coder | reviewer |
+|---|---|---|
+| `"haiku"` | Claude 3 Haiku（高速・低コスト） | Claude 3 Haiku |
+| `"sonnet"` | Claude 3.5 Sonnet（バランス型） | Claude 3 Haiku |
+| `"opus"` | Claude 3 Opus（高性能） | Claude 3.5 Sonnet |
+
+> **Note:** reviewer は常に1ティア下のモデルを使用します。  
+> IoTトリガー経由の場合は走行時の加速度 magnitude から自動決定されます（`<12→haiku`, `12–18→sonnet`, `≥18→opus`）。
 
 ---
 
