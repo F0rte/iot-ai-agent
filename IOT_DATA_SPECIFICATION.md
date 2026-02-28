@@ -113,8 +113,8 @@ hackathon/run/{environment}
 
 ```json
 {
-  "is_running": boolean,
-  "bpm": integer,
+  "status": "Run" | "Walk" | "None",
+  "bpm": float,
   "timestamp": string (ISO 8601, optional),
   "device_id": string (optional)
 }
@@ -124,45 +124,53 @@ hackathon/run/{environment}
 
 | Field | Type | Required | Description | Example |
 |-------|------|----------|-------------|---------|
-| `is_running` | boolean | ✅ Yes | Whether the user is currently running | `true`, `false` |
-| `bpm` | integer | ✅ Yes | Heart rate in beats per minute | `135` |
+| `status` | string | ✅ Yes | Activity status determined by device-side threshold | `"Run"`, `"Walk"`, `"None"` |
+| `bpm` | float | ✅ Yes | Acceleration magnitude (m/s²) used for activity detection | `25.3` |
 | `timestamp` | string | ❌ No | ISO 8601 timestamp when data was captured | `"2026-02-28T10:30:00Z"` |
-| `device_id` | string | ❌ No | Unique identifier for the device | `"swift-client-a1b2c3d4"` |
+| `device_id` | string | ❌ No | Unique identifier for the device | `"esp32-aabbccddeeff"` |
+
+#### Status Values
+
+| Value | Condition | Model Tier |
+|-------|-----------|------------|
+| `"Run"` | `bpm > 30.0` | sonnet (claude-sonnet-4-5) |
+| `"Walk"` | `bpm > 20.0` | sonnet-3 (claude-3-5-sonnet) |
+| `"None"` | `bpm <= 20.0` | haiku (claude-haiku-4-5) |
 
 #### Validation Rules
 
-- `is_running`: Must be `true` or `false`
-- `bpm`: Must be integer, range 30-220 (typical human heart rate)
+- `status`: Must be one of `"Run"`, `"Walk"`, `"None"`
+- `bpm`: Float value representing acceleration magnitude in m/s²
 - `timestamp`: Must be valid ISO 8601 format if provided
 - `device_id`: Max 64 characters
 
 #### Example Messages
 
-**Minimal (current implementation)**:
+**Running**:
 ```json
 {
-  "is_running": true,
-  "bpm": 135
+  "status": "Run",
+  "bpm": 35.2
 }
 ```
 
 **Complete**:
 ```json
 {
-  "is_running": true,
-  "bpm": 142,
+  "status": "Walk",
+  "bpm": 22.5,
   "timestamp": "2026-02-28T10:45:32Z",
-  "device_id": "swift-client-a1b2c3d4"
+  "device_id": "esp32-aabbccddeeff"
 }
 ```
 
-**Running stopped**:
+**Stopped**:
 ```json
 {
-  "is_running": false,
-  "bpm": 98,
+  "status": "None",
+  "bpm": 10.1,
   "timestamp": "2026-02-28T11:15:00Z",
-  "device_id": "swift-client-a1b2c3d4"
+  "device_id": "esp32-aabbccddeeff"
 }
 ```
 
@@ -174,8 +182,8 @@ For more advanced fitness tracking, the schema can be extended:
 
 ```json
 {
-  "is_running": boolean,
-  "bpm": integer,
+  "status": "Run" | "Walk" | "None",
+  "bpm": float,
   "timestamp": string,
   "device_id": string,
   "metrics": {
@@ -208,8 +216,8 @@ Sent immediately when IoT data is received.
   "type": "iot",
   "topic": "hackathon/run/test",
   "data": {
-    "is_running": true,
-    "bpm": 135
+    "status": "Run",
+    "bpm": 35.2
   }
 }
 ```
@@ -390,8 +398,8 @@ connect_future.result()
 # Publish data
 topic = "hackathon/run/test"
 message = {
-    "is_running": True,
-    "bpm": 145,
+    "status": "Run",
+    "bpm": 35.2,
     "timestamp": "2026-02-28T10:45:00Z",
     "device_id": "custom-sensor-001"
 }
@@ -422,9 +430,9 @@ const char* topic = "hackathon/run/test";
 WiFiClientSecure espClient;
 PubSubClient client(espClient);
 
-void publishRunData(bool isRunning, int bpm) {
+void publishRunData(const char* status, float bpm) {
     StaticJsonDocument<200> doc;
-    doc["is_running"] = isRunning;
+    doc["status"] = status;
     doc["bpm"] = bpm;
     doc["timestamp"] = getCurrentTimestamp(); // Implement this
     doc["device_id"] = "esp32-001";
@@ -436,10 +444,10 @@ void publishRunData(bool isRunning, int bpm) {
 }
 
 void loop() {
-    bool isRunning = detectMotion(); // Implement sensor logic
-    int bpm = readHeartRate();       // Implement sensor logic
+    float accel = readAccelMagnitude();  // Implement sensor logic
+    const char* status = accel > 30.0f ? "Run" : accel > 20.0f ? "Walk" : "None";
 
-    publishRunData(isRunning, bpm);
+    publishRunData(status, accel);
     delay(5000); // Send every 5 seconds
 }
 ```
@@ -455,7 +463,7 @@ void loop() {
 # Publish test message
 aws iot-data publish \
   --topic "hackathon/run/test" \
-  --payload '{"is_running":true,"bpm":120}' \
+  --payload '{"status":"Run","bpm":35.2}' \
   --endpoint-url https://xxxxx.iot.ap-northeast-1.amazonaws.com
 
 # Or using mosquitto_pub with WebSockets
@@ -463,7 +471,7 @@ mosquitto_pub \
   -h xxxxx.iot.ap-northeast-1.amazonaws.com \
   -p 443 \
   -t "hackathon/run/test" \
-  -m '{"is_running":true,"bpm":120}' \
+  -m '{"status":"Run","bpm":35.2}' \
   --cafile AmazonRootCA1.pem
 ```
 

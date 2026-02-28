@@ -40,9 +40,9 @@ _SENSOR_PROMPTS = {
 
 
 def classify(state: AgentState) -> dict:
-    """センサー種別をStatusキーの存在で判定する"""
+    """センサー種別をstatusキーの存在で判定する"""
     msg = state["iot_message"]
-    if "Status" in msg:
+    if "status" in msg:
         return {"sensor_type": "motion"}
     return {"sensor_type": "unknown"}
 
@@ -59,7 +59,7 @@ def trigger_check(state: AgentState) -> dict:
     global _prev_running
     msg = state["iot_message"]
 
-    status = msg.get("Status", "None")  # "Run" | "Walk" | "None"
+    status = msg.get("status", "None")  # "Run" | "Walk" | "None" (lowercase key)
     is_running = status in ("Run", "Walk")
 
     if is_running and not _prev_running:
