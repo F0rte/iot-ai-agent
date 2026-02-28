@@ -195,11 +195,13 @@ ai-agent/
 
 | モデル | Model ID | 用途 |
 |-------|----------|------|
-| Claude 3 Haiku | `anthropic.claude-3-haiku-20240307-v1:0` | 高速・低コスト（デフォルト） |
-| Claude 3.5 Sonnet | `anthropic.claude-3-5-sonnet-20240620-v1:0` | バランス型（複雑な実装向け） |
-| Claude 3 Opus | `anthropic.claude-3-opus-20240229-v1:0` | 高性能 |
+| Claude Haiku 4.5 | `anthropic.claude-haiku-4-5-20251001-v1:0` | 高速・低コスト（haiku tier） |
+| Claude Sonnet 4.5 | `anthropic.claude-sonnet-4-5-20250929-v1:0` | バランス型（sonnet tier） |
+| Claude Opus 4.5 | `anthropic.claude-opus-4-5-20251101-v1:0` | 高性能（opus tier） |
 
-モデルを変更する場合は `agent/graph.py` と `agent/dev_graph.py` の `model` を編集してください。
+旧世代モデル（`haiku-3` / `sonnet-3` / `opus-3`）もフォールバック用として `_MODEL_IDS` に定義されています。
+
+モデルティアのカスタマイズは `agent/dev_graph.py` の `_MODEL_IDS` を編集してください。
 
 ---
 

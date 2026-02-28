@@ -12,7 +12,7 @@ from agent.state import AgentState
 from agent.tools import ALL_TOOLS, set_workspace_root, set_is_running
 
 _llm = ChatBedrockConverse(
-    model="anthropic.claude-3-haiku-20240307-v1:0",
+    model="anthropic.claude-haiku-4-5-20251001-v1:0",
     region_name=os.environ.get("AWS_BEDROCK_REGION", os.environ.get("AWS_REGION", "us-east-1")),
 )
 _llm_with_tools = _llm.bind_tools(ALL_TOOLS)
