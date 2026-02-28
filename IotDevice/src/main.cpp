@@ -8,11 +8,14 @@
 */
 
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <Update.h>
 #include <Preferences.h>
 #include <Wire.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
+#include <PubSubClient.h>
+#include <ArduinoJson.h>
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
@@ -32,9 +35,9 @@
 #define WIFI_PASS_MAX 64
 
 // I2C / MPU6050
-#define MPU6050_SDA_PIN 13
-#define MPU6050_SCL_PIN 12
-#define SENSOR_SEND_INTERVAL_MS 100
+#define MPU6050_SDA_PIN 12
+#define MPU6050_SCL_PIN 11
+#define SENSOR_SEND_INTERVAL_MS 10000
 #define SENSOR_ERROR_NOTIFY_INTERVAL_MS 1000
 
 // LED
@@ -59,6 +62,89 @@ const char *NVS_SYSCFG_NS = "syscfg";
 #define OTA_CONTROL_UUID "9f5f0002-8d9e-6f4e-bd0c-3c4d5e6f7180"
 #define OTA_DATA_UUID "9f5f0003-8d9e-6f4e-bd0c-3c4d5e6f7180"
 #define OTA_STATUS_UUID "9f5f0004-8d9e-6f4e-bd0c-3c4d5e6f7180"
+
+// AWS IoT Core
+#define AWS_IOT_ENDPOINT "a12vyeza8y4zmz-ats.iot.ap-northeast-1.amazonaws.com"
+#define AWS_IOT_PORT 8883
+#define AWS_IOT_TOPIC "hackathon/run/test"
+#define AWS_PUBLISH_INTERVAL_MS 10000
+#define SENSOR_SAMPLE_INTERVAL_MS 500
+
+const char AWS_ROOT_CA[] PROGMEM = R"EOF(
+-----BEGIN CERTIFICATE-----
+MIIDQTCCAimgAwIBAgITBmyfz5m/jAo54vB4ikPmljZbyjANBgkqhkiG9w0BAQsF
+ADA5MQswCQYDVQQGEwJVUzEPMA0GA1UEChMGQW1hem9uMRkwFwYDVQQDExBBbWF6
+b24gUm9vdCBDQSAxMB4XDTE1MDUyNjAwMDAwMFoXDTM4MDExNzAwMDAwMFowOTEL
+MAkGA1UEBhMCVVMxDzANBgNVBAoTBkFtYXpvbjEZMBcGA1UEAxMQQW1hem9uIFJv
+b3QgQ0EgMTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALJ4gHHKeNXj
+ca9HgFB0fW7Y14h29Jlo91ghYPl0hAEvrAIthtOgQ3pOsqTQNroBvo3bSMgHFzZM
+9O6II8c+6zf1tRn4SWiw3te5djgdYZ6k/oI2peVKVuRF4fn9tBb6dNqcmzU5L/qw
+IFAGbHrQgLKm+a/sRxmPUDgH3KKHOVj4utWp+UhnMJbulHheb4mjUcAwhmahRWa6
+VOujw5H5SNz/0egwLX0tdHA114gk957EWW67c4cX8jJGKLhD+rcdqsq08p8kDi1L
+93FcXmn/6pUCyziKrlA4b9v7LWIbxcceVOF34GfID5yHI9Y/QCB/IIDEgEw+OyQm
+jgSubJrIqg0CAwEAAaNCMEAwDwYDVR0TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMC
+AYYwHQYDVR0OBBYEFIQYzIU07LwMlJQuCFmcx7IQTgoIMA0GCSqGSIb3DQEBCwUA
+A4IBAQCY8jdaQZChGsV2USggNiMOruYou6r4lK5IpDB/G/wkjUu0yKGX9rbxenDI
+U5PMCCjjmCXPI6T53iHTfIUJrU6adTrCC2qJeHZERxhlbI1Bjjt/msv0tadQ1wUs
+N+gDS63pYaACbvXy8MWy7Vu33PqUXHeeE6V/Uq2V8viTO96LXFvKWlJbYK8U90vv
+o/ufQJVtMVT8QtPHRh8jrdkPSHCa2XV4cdFyQzR1bldZwgJcJmApzyMZFo6IQ6XU
+5MsI+yMRQ+hDKXJioaldXgjUkK642M4UwtBV8ob2xJNDd2ZhwLnoQdeXeGADbkpy
+rqXRfboQnoZsG4q5WTP468SQvvG5
+-----END CERTIFICATE-----
+)EOF";
+
+const char AWS_DEVICE_CERT[] PROGMEM = R"EOF(
+-----BEGIN CERTIFICATE-----
+MIIDWTCCAkGgAwIBAgIUUq+5AoVUnk9pVCziw3MDdAqICWgwDQYJKoZIhvcNAQEL
+BQAwTTFLMEkGA1UECwxCQW1hem9uIFdlYiBTZXJ2aWNlcyBPPUFtYXpvbi5jb20g
+SW5jLiBMPVNlYXR0bGUgU1Q9V2FzaGluZ3RvbiBDPVVTMB4XDTI2MDIyODE1MDEz
+NVoXDTQ5MTIzMTIzNTk1OVowHjEcMBoGA1UEAwwTQVdTIElvVCBDZXJ0aWZpY2F0
+ZTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALApQdZLceUK3yf51SYh
+CcXSbTRvQh4peYlxnlwB3aGL6wP+WP0Okh+jR3wSTmHGtFVn3eKzTtAH7bIkt0sW
+zQkOV+ptkWq6FbCxmQjCvD9i4RNSn/vc5ltRnwl4XUJOytEo3nJBB5unZ58G5b6U
+FMNN87WqveaQOTW3Mlx2sO+13qRN/RApI4t1CR/45SxQul7kNQdUckYgemoyideG
+0RwV6MzOwdI3z+dwi2vu1NFmm7H2gprP5xHqrsOvyshyESrQ51se05hRxGKwhz+y
+BlcXwG4V7j6tf9UKR04GIzuvHgK5UBlrqjtcczUGEwuxWJWsEtCyElb8Soo8xMK0
+GS0CAwEAAaNgMF4wHwYDVR0jBBgwFoAULzmlO16iAH79tGOK7XrWfZ2KUCEwHQYD
+VR0OBBYEFASDgWs3SKct8nvD49DkIikinGo3MAwGA1UdEwEB/wQCMAAwDgYDVR0P
+AQH/BAQDAgeAMA0GCSqGSIb3DQEBCwUAA4IBAQA/g0te0o2cFUAE5PdHXPiiqAsp
+UVot8QYW90xDwEqCwo8XE86heItvjtrJHm2rNbuf32qI6ereYq1+7hxG8ksVKUCq
+vbHdegcqER6A4gvQW96ydUTY/JCc7dbEENj61oVFGyMUUT+J4JBfMUzcvL/Ohnh+
+UinEaHAfrlwMH+2I+1b4bQ6kzbutLfFxGIGSral5XsSljQYlkHRe2Q2GK+wXdC07
++uRKxU4+bPhmSxH01CCoLSfRkrnqHoUQDA73kUGfoQxQQYYk/qxyI+vXyY6QEIGv
+69lTJp6CD/CJxz806F/nxNR82c1nJHnQ6Z1z4GsjYDNZtqmbH+6DUJHg+wcg
+-----END CERTIFICATE-----
+)EOF";
+
+const char AWS_PRIVATE_KEY[] PROGMEM = R"EOF(
+-----BEGIN RSA PRIVATE KEY-----
+MIIEpQIBAAKCAQEAsClB1ktx5QrfJ/nVJiEJxdJtNG9CHil5iXGeXAHdoYvrA/5Y
+/Q6SH6NHfBJOYca0VWfd4rNO0AftsiS3SxbNCQ5X6m2RaroVsLGZCMK8P2LhE1Kf
++9zmW1GfCXhdQk7K0SjeckEHm6dnnwblvpQUw03ztaq95pA5NbcyXHaw77XepE39
+ECkji3UJH/jlLFC6XuQ1B1RyRiB6ajKJ14bRHBXozM7B0jfP53CLa+7U0WabsfaC
+ms/nEequw6/KyHIRKtDnWx7TmFHEYrCHP7IGVxfAbhXuPq1/1QpHTgYjO68eArlQ
+GWuqO1xzNQYTC7FYlawS0LISVvxKijzEwrQZLQIDAQABAoIBAQCa93BHR48l4e51
+iD2NkTq7n2UZ31XWmr2jvyOD5NBHMILJvJIj6xF4a3aTGreBI/+3setrZjlKn+7l
+646iq6gq80c7nq9xp8k06sapAkX/rMg661B5i9XJN4AkIJJJpm6cmMs2zyYWM6ng
+J30rrbCmLojZox3zGaR6MHJJDNCRzYFN7gFAvbhdCfrx+2ddQZc0khYnRMMIgL+U
+u/JoRd4XYjGDwLuYWz1XfC4uiwNs9uTtRv7y58tA/uclZJAZSN9jcGxX2DMXmbXE
+eSDRRWbrtND6X1nZ8uyhdtnkhqOZ19Ip4eW/3KbmoPA8g1CfUZ6zSN2J40em7Aqd
+QLa7XZoxAoGBAOOEwSggsei1u2aiZdooq0Ht7ueyitH7S6108z1fQitrsA1W0n9m
+UDedIjIWTaUqG+CJBlHhGbebXsSfc86hUP8Znvb/Y2jE/HprZH55rcMUdgN36I4C
+PrfWzRBt5UqFBQC/Mxve45Adax2PvqdUvYYir1ToPh6H90UzwNjfoJ2bAoGBAMY2
+qUWfGTG6hYELmsf6fq1BTDdIaZiPciI+SR/wrH1YuYLWwldgIkEfDKicXo2Ybsv6
+wg/krtKMQnOQFbzAw5HcjNOi6zN7FtmvMHHOSKUEGAc+reGSQQiFEiCRy/HhOWX0
+e/UGSKCF9MkOE0Rp+xhtKdFGG2KveeLkXiurSPTXAoGAdj8P2JgtfsG81RnAD8Ml
+Rs2vZdIgXgPaEBuBM7tne4OrazNdkYMOW+kZ1ahL0HRzKp5sn297Wzav6Ubp/FFQ
+9FRPjxWqh9AhXEqmXylESug+cY0HW48FI6zKxSgojDNYJ0w39ts/sC3p9uI3d2YO
+XkF2mI1fg6SsudWs+8o2AtMCgYEAvKWteSuw6Nli0qzexVGtWuv4w+zRQ3fS4rBx
+HEsNf8b/2HzZPhuqvlv0ykz42L6pRM4GAOZfVNhVLnOFnL3B5IMKLSqzu6180/We
+n9H65cL9s3d+Ol/eMWOlGwZoGm+HF3gWud8fJFgZ33jb8ZMEffz3fcvBqKzlzoIW
+9mzw5MUCgYEAzwl49lLQCIxAFtVvy9MGw67xl1FSlV36+D5HI4YOO1WxbQfn71NU
+157dh0fa3Cw7droDBEyfw+WOlSOhXp4yyzaBFPOZpma/KlTP5uMsFF/FHOhkxSR8
+azBOs4rd3zq+aN9JU/7z2SnJhpEAIg1dcwaecibefHopMvcs7p48/7I=
+-----END RSA PRIVATE KEY-----
+)EOF";
 
 // =============================================================================
 // Global Variables
@@ -114,6 +200,209 @@ bool ble_device_connected = false;
 
 Adafruit_MPU6050 mpu;
 bool mpu_initialized = false;
+
+void log_println(const char *msg);
+
+WiFiClientSecure aws_secure_client;
+PubSubClient aws_mqtt_client(aws_secure_client);
+bool aws_client_initialized = false;
+unsigned long last_aws_connect_try = 0;
+unsigned long last_aws_publish_time = 0;
+String last_activity_status = "None";
+bool has_last_activity_status = false;
+char aws_client_id[48] = {0};
+
+const unsigned long AWS_RECONNECT_INTERVAL_MS = 5000;
+
+const char *activity_status_from_magnitude(float accel_magnitude)
+{
+    if (accel_magnitude > 30.0f)
+    {
+        return "Run";
+    }
+
+    if (accel_magnitude > 15.0f)
+    {
+        return "Walk";
+    }
+
+    return "None";
+}
+
+void aws_iot_init(void)
+{
+    if (aws_client_initialized)
+    {
+        return;
+    }
+
+    // Generate unique client ID from MAC address
+    uint8_t mac[6];
+    WiFi.macAddress(mac);
+    snprintf(aws_client_id, sizeof(aws_client_id), "esp32-%02x%02x%02x%02x%02x%02x",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+    char id_log[96];
+    snprintf(id_log, sizeof(id_log), "[AWS] Client ID: %s", aws_client_id);
+    log_println(id_log);
+
+    log_println("[AWS] Setting up secure client certificates...");
+    aws_secure_client.setCACert(AWS_ROOT_CA);
+    aws_secure_client.setCertificate(AWS_DEVICE_CERT);
+    aws_secure_client.setPrivateKey(AWS_PRIVATE_KEY);
+
+    // Set timeouts to prevent hanging
+    aws_secure_client.setTimeout(5000);        // 5 second socket timeout
+    aws_secure_client.setHandshakeTimeout(15); // 15 second handshake timeout
+
+    log_println("[AWS] Configuring MQTT client...");
+    aws_mqtt_client.setServer(AWS_IOT_ENDPOINT, AWS_IOT_PORT);
+    aws_mqtt_client.setSocketTimeout(5); // 5 second MQTT timeout
+    aws_mqtt_client.setKeepAlive(30);    // 30 second keepalive
+
+    aws_client_initialized = true;
+    log_println("[AWS] MQTT client initialized");
+}
+
+void aws_iot_connect_if_needed(void)
+{
+    if (g_state.wifi_state != WIFI_CONNECTED)
+    {
+        return;
+    }
+
+    if (!aws_client_initialized)
+    {
+        aws_iot_init();
+    }
+
+    if (aws_mqtt_client.connected())
+    {
+        return;
+    }
+
+    if (millis() - last_aws_connect_try < AWS_RECONNECT_INTERVAL_MS)
+    {
+        return;
+    }
+    last_aws_connect_try = millis();
+
+    char connect_msg[128];
+    snprintf(connect_msg, sizeof(connect_msg), "[AWS] Attempting connection with client ID: %s", aws_client_id);
+    log_println(connect_msg);
+
+    char endpoint_msg[128];
+    snprintf(endpoint_msg, sizeof(endpoint_msg), "[AWS] Endpoint: %s:%d", AWS_IOT_ENDPOINT, AWS_IOT_PORT);
+    log_println(endpoint_msg);
+
+    log_println("[AWS] Starting TLS handshake...");
+
+    unsigned long connect_start = millis();
+    bool connected = aws_mqtt_client.connect(aws_client_id);
+    unsigned long connect_duration = millis() - connect_start;
+
+    char duration_msg[64];
+    snprintf(duration_msg, sizeof(duration_msg), "[AWS] Connect attempt took %lu ms", connect_duration);
+    log_println(duration_msg);
+
+    if (connected)
+    {
+        log_println("[AWS] Successfully connected to AWS IoT Core");
+    }
+    else
+    {
+        int state = aws_mqtt_client.state();
+        char err[128];
+        snprintf(err, sizeof(err), "[AWS] Connection failed: state=%d", state);
+        log_println(err);
+
+        // Decode error state
+        const char *state_desc = "UNKNOWN";
+        switch (state)
+        {
+        case -4:
+            state_desc = "TIMEOUT";
+            break;
+        case -3:
+            state_desc = "CONNECTION_LOST";
+            break;
+        case -2:
+            state_desc = "CONNECT_FAILED";
+            break;
+        case -1:
+            state_desc = "DISCONNECTED";
+            break;
+        case 1:
+            state_desc = "PROTOCOL_VERSION";
+            break;
+        case 2:
+            state_desc = "CLIENT_ID_REJECTED";
+            break;
+        case 3:
+            state_desc = "SERVER_UNAVAILABLE";
+            break;
+        case 4:
+            state_desc = "BAD_CREDENTIALS";
+            break;
+        case 5:
+            state_desc = "NOT_AUTHORIZED";
+            break;
+        }
+
+        char state_msg[96];
+        snprintf(state_msg, sizeof(state_msg), "[AWS] Error: %s", state_desc);
+        log_println(state_msg);
+
+        // Explicitly disconnect secure client to reset state
+        aws_secure_client.stop();
+    }
+}
+
+bool aws_iot_publish_sensor(float accel_magnitude, const char *status, bool status_changed)
+{
+    if (!aws_mqtt_client.connected())
+    {
+        return false;
+    }
+
+    JsonDocument doc;
+    doc["is_running"] = strcmp(status, "None") != 0;
+    doc["bpm"] = accel_magnitude;
+    doc["status"] = status;
+    doc["device_id"] = g_state.device_name;
+
+    char payload[256];
+    size_t payload_len = serializeJson(doc, payload, sizeof(payload));
+    if (payload_len == 0)
+    {
+        log_println("[AWS] Failed to serialize JSON payload");
+        return false;
+    }
+
+    char reason[32];
+    snprintf(reason, sizeof(reason), "%s", status_changed ? "STATUS_CHANGE" : "INTERVAL");
+
+    char prelog[128];
+    snprintf(prelog, sizeof(prelog), "[AWS][BLE] Publish reason=%s status=%s bpm=%.3f",
+             reason, status, accel_magnitude);
+    log_println(prelog);
+
+    bool published = aws_mqtt_client.publish(AWS_IOT_TOPIC, payload);
+    if (published)
+    {
+        char oklog[128];
+        snprintf(oklog, sizeof(oklog), "[AWS][BLE] Publish success topic=%s", AWS_IOT_TOPIC);
+        log_println(oklog);
+    }
+    else
+    {
+        char nglog[128];
+        snprintf(nglog, sizeof(nglog), "[AWS][BLE] Publish failed state=%d", aws_mqtt_client.state());
+        log_println(nglog);
+    }
+
+    return published;
+}
 
 // =============================================================================
 // Utility Functions
@@ -171,6 +460,12 @@ esp_err_t wifi_mgr_connect(void)
         g_state.wifi_state = WIFI_FAILED;
         return ESP_FAIL;
     }
+
+    // Debug: Show what we're trying to connect to
+    char debug_msg[128];
+    snprintf(debug_msg, sizeof(debug_msg), "[I] Connecting to SSID: '%s' (len=%d, pass_len=%d)",
+             ssid, ssid_len, pass_len);
+    log_println(debug_msg);
 
     log_println("[I] Starting Wi-Fi connection...");
     g_state.wifi_state = WIFI_CONNECTING;
@@ -246,8 +541,11 @@ class MyCharacteristicCallbacks : public BLECharacteristicCallbacks
             String command = String(rxValue.c_str());
             command.trim();
 
-            Serial.print("[BLE RX] ");
-            Serial.println(command);
+            // Log via BLE as well
+            char ble_log[128];
+            snprintf(ble_log, sizeof(ble_log), "[BLE RX] %s", command.c_str());
+            log_println(ble_log);
+            Serial.println("[BLE RX] Command received via Serial");
 
             // Handle special commands
             if (command == "RESET_NVS" || command == "FACTORY_RESET")
@@ -323,14 +621,37 @@ class ProvisioningCallbacks : public BLECharacteristicCallbacks
         }
 
         log_println("[I] Received Wi-Fi credentials via BLE");
-        Serial.print("[I] SSID: ");
-        Serial.println(ssid);
+
+        // Log SSID and lengths (via BLE too)
+        char ssid_info[128];
+        snprintf(ssid_info, sizeof(ssid_info), "[I] SSID: %s", ssid.c_str());
+        log_println(ssid_info);
+
+        char len_info[64];
+        snprintf(len_info, sizeof(len_info), "[I] SSID length: %d", ssid.length());
+        log_println(len_info);
+
+        snprintf(len_info, sizeof(len_info), "[I] Password length: %d", password.length());
+        log_println(len_info);
 
         // Save to NVS
         nvs_wifi.begin(NVS_WIFI_NS, false);
         nvs_wifi.putString("ssid", ssid.c_str());
         nvs_wifi.putString("pass", password.c_str());
         nvs_wifi.end();
+
+        // Verify what was saved
+        char verify_ssid[WIFI_SSID_MAX] = {0};
+        nvs_wifi.begin(NVS_WIFI_NS, true);
+        size_t verify_len = nvs_wifi.getString("ssid", verify_ssid, sizeof(verify_ssid));
+        nvs_wifi.end();
+
+        char verify_info[128];
+        snprintf(verify_info, sizeof(verify_info), "[I] Verified saved SSID: %s", verify_ssid);
+        log_println(verify_info);
+
+        snprintf(verify_info, sizeof(verify_info), "[I] Verified SSID length: %d", verify_len);
+        log_println(verify_info);
 
         // Mark as provisioned
         nvs_syscfg.begin(NVS_SYSCFG_NS, false);
@@ -341,6 +662,9 @@ class ProvisioningCallbacks : public BLECharacteristicCallbacks
 
         // Update state and start WiFi connection
         g_state.system_state = STATE_PROVISIONING;
+
+        // Add small delay before attempting connection
+        delay(500);
         wifi_mgr_connect();
     }
 };
@@ -624,21 +948,15 @@ void init_ble(void)
     log_println("[I] Setting up OTA service...");
     setup_ble_ota_service();
 
-    // Setup provisioning service if in PROVISIONING mode
-    if (g_state.system_state == STATE_PROVISIONING)
-    {
-        log_println("[I] Setting up provisioning service...");
-        setup_ble_provisioning_service();
-    }
+    // Setup provisioning service (always available for WiFi re-provisioning during operation)
+    log_println("[I] Setting up provisioning service...");
+    setup_ble_provisioning_service();
 
     log_println("[I] Starting advertising...");
     BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(DEBUG_SERVICE_UUID);
     pAdvertising->addServiceUUID(OTA_SERVICE_UUID);
-    if (g_state.system_state == STATE_PROVISIONING)
-    {
-        pAdvertising->addServiceUUID(PROV_SERVICE_UUID);
-    }
+    pAdvertising->addServiceUUID(PROV_SERVICE_UUID); // Always advertise provisioning service
     pAdvertising->setScanResponse(true);
     pAdvertising->setMinPreferred(0x06);
     pAdvertising->setMaxPreferred(0x12);
@@ -739,9 +1057,32 @@ void wifi_event_handler(WiFiEvent_t event)
     }
 
     case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+    {
         g_state.wifi_state = WIFI_FAILED;
-        log_println("[W] Wi-Fi disconnected");
+
+        if (aws_mqtt_client.connected())
+        {
+            aws_mqtt_client.disconnect();
+            log_println("[AWS] MQTT disconnected due to Wi-Fi disconnect");
+        }
+
+        // Get detailed disconnect reason
+        char reason_msg[128];
+        snprintf(reason_msg, sizeof(reason_msg),
+                 "[W] Wi-Fi disconnected (status=%d)", WiFi.status());
+        log_println(reason_msg);
+
+        // Additional debug info
+        if (WiFi.status() == WL_NO_SSID_AVAIL)
+        {
+            log_println("[E] SSID not found - check if SSID is correct");
+        }
+        else if (WiFi.status() == WL_CONNECT_FAILED)
+        {
+            log_println("[E] Connection failed - check password");
+        }
         break;
+    }
 
     default:
         break;
@@ -899,13 +1240,64 @@ void loop()
         return;
     }
 
-    // Wi-Fi state monitoring
-    if (g_state.wifi_state == WIFI_CONNECTING)
+    // Wi-Fi state monitoring and auto-reconnect management
+    static unsigned long last_wifi_check = 0;
+    static unsigned long last_wifi_reconnect_try = 0;
+    static unsigned long wifi_connect_start_time = 0;
+
+    if (millis() - last_wifi_check > 5000) // Check WiFi state every 5 seconds
     {
-        if (WiFi.status() == WL_CONNECTED)
+        last_wifi_check = millis();
+
+        if (g_state.wifi_state == WIFI_CONNECTING)
         {
-            // Will be handled by event handler
+            if (WiFi.status() == WL_CONNECTED)
+            {
+                // Will be handled by event handler
+            }
+            else
+            {
+                // Check for connection timeout (30 seconds)
+                if (wifi_connect_start_time > 0 &&
+                    (millis() - wifi_connect_start_time > 30000))
+                {
+                    log_println("[E] WiFi connection timeout - marking as failed");
+                    g_state.wifi_state = WIFI_FAILED;
+                    wifi_connect_start_time = 0;
+                    WiFi.disconnect();
+                }
+            }
         }
+
+        // Auto-reconnect: if WiFi config exists but not connected, try to connect
+        if ((g_state.wifi_state == WIFI_IDLE || g_state.wifi_state == WIFI_FAILED) &&
+            (millis() - last_wifi_reconnect_try > 30000)) // Retry every 30 seconds
+        {
+            char ssid[WIFI_SSID_MAX] = {0};
+            nvs_wifi.begin(NVS_WIFI_NS, true);
+            size_t ssid_len = nvs_wifi.getString("ssid", ssid, sizeof(ssid));
+            nvs_wifi.end();
+
+            if (ssid_len > 0) // WiFi config exists
+            {
+                log_println("[I] Loop: WiFi config found, initiating connection...");
+                last_wifi_reconnect_try = millis();
+                wifi_connect_start_time = millis();
+                wifi_mgr_connect();
+            }
+        }
+        else if (g_state.wifi_state == WIFI_CONNECTING && wifi_connect_start_time == 0)
+        {
+            // Initialize connection start time if not set
+            wifi_connect_start_time = millis();
+        }
+    }
+
+    // AWS MQTT connection keep-alive
+    aws_iot_connect_if_needed();
+    if (aws_mqtt_client.connected())
+    {
+        aws_mqtt_client.loop();
     }
 
     // Every 10 seconds, update BLE debug stat
@@ -928,26 +1320,46 @@ void loop()
         }
     }
 
-    // Send acceleration data every 0.1s over BLE as CSV: ax,ay,az
+    // Send acceleration data to AWS (every 10 sec and status change), and BLE every 10 sec
+    static unsigned long last_sensor_sample = 0;
     static unsigned long last_sensor_send = 0;
     static unsigned long last_sensor_error_notify = 0;
 
-    if (millis() - last_sensor_send >= SENSOR_SEND_INTERVAL_MS)
+    if (mpu_initialized && millis() - last_sensor_sample >= SENSOR_SAMPLE_INTERVAL_MS)
     {
-        last_sensor_send = millis();
+        last_sensor_sample = millis();
 
-        if (mpu_initialized && ble_device_connected && pDebugLogTx)
+        sensors_event_t accel;
+        sensors_event_t gyro;
+        sensors_event_t temp;
+        mpu.getEvent(&accel, &gyro, &temp);
+
+        float accel_magnitude = fabs(accel.acceleration.x) + fabs(accel.acceleration.y) + fabs(accel.acceleration.z);
+        const char *current_status = activity_status_from_magnitude(accel_magnitude);
+
+        bool status_changed = !has_last_activity_status || (last_activity_status != current_status);
+        bool interval_due = millis() - last_aws_publish_time >= AWS_PUBLISH_INTERVAL_MS;
+
+        if ((status_changed || interval_due) && aws_mqtt_client.connected())
         {
-            sensors_event_t accel;
-            sensors_event_t gyro;
-            sensors_event_t temp;
-            mpu.getEvent(&accel, &gyro, &temp);
+            if (aws_iot_publish_sensor(accel_magnitude, current_status, status_changed))
+            {
+                last_aws_publish_time = millis();
+                last_activity_status = current_status;
+                has_last_activity_status = true;
+
+                digitalWrite(LED_PIN, HIGH);
+                delay(10);
+                digitalWrite(LED_PIN, LOW);
+            }
+        }
+
+        if (millis() - last_sensor_send >= SENSOR_SEND_INTERVAL_MS && ble_device_connected && pDebugLogTx)
+        {
+            last_sensor_send = millis();
 
             char csv[64];
-            snprintf(csv, sizeof(csv), "%.3f,%.3f,%.3f",
-                     accel.acceleration.x,
-                     accel.acceleration.y,
-                     accel.acceleration.z);
+            snprintf(csv, sizeof(csv), "%.3f", accel_magnitude);
 
             // Blink LED when sending acceleration data
             digitalWrite(LED_PIN, HIGH);
@@ -956,33 +1368,17 @@ void loop()
             delay(10);
             digitalWrite(LED_PIN, LOW);
         }
-        else if (!mpu_initialized && ble_device_connected && pDebugLogTx)
-        {
-            // Send error notification every 1s (throttled)
-            if (millis() - last_sensor_error_notify >= SENSOR_ERROR_NOTIFY_INTERVAL_MS)
-            {
-                last_sensor_error_notify = millis();
-                const char *err = "[E] MPU6050_NOT_FOUND";
-                pDebugLogTx->setValue((uint8_t *)err, strlen(err));
-                pDebugLogTx->notify();
-            }
-        }
     }
-
-    // Simulate normal app operation with periodic Hello World on UART
-    static unsigned long last_app_update = 0;
-    if (millis() - last_app_update > 30000)
+    else if (!mpu_initialized && ble_device_connected && pDebugLogTx)
     {
-        last_app_update = millis();
-
-        // This is the app core functionality
-        Serial.println("\n[App Core] ======================================");
-        Serial.println("[App Core] Hello World via Serial (UART)");
-        Serial.println("[App Core] This is the embedded application running on ESP32-S3");
-        Serial.println("[App Core] Current system state: " + String(g_state.system_state));
-        Serial.println("[App Core] Wi-Fi state: " + String(g_state.wifi_state));
-        Serial.println("[App Core] OTA mode: " + String(ota_mode_active ? "ACTIVE" : "IDLE"));
-        Serial.println("[App Core] ======================================\n");
+        // Send error notification every 1s (throttled)
+        if (millis() - last_sensor_error_notify >= SENSOR_ERROR_NOTIFY_INTERVAL_MS)
+        {
+            last_sensor_error_notify = millis();
+            const char *err = "[E] MPU6050_NOT_FOUND";
+            pDebugLogTx->setValue((uint8_t *)err, strlen(err));
+            pDebugLogTx->notify();
+        }
     }
 
     delay(100);
