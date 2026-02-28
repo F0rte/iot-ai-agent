@@ -19,10 +19,22 @@ _ANOMALY_THRESHOLDS: dict[str, dict[str, tuple[float, float]]] = {
 # ファイル操作ツールが参照するワークスペースルート
 _workspace_root: str = ""
 
+# 走行中フラグ（notify_start/stop から更新、dev_graph から参照）
+_is_running: bool = False
+
 
 def set_workspace_root(path: str) -> None:
     global _workspace_root
     _workspace_root = path
+
+
+def set_is_running(value: bool) -> None:
+    global _is_running
+    _is_running = value
+
+
+def get_is_running() -> bool:
+    return _is_running
 
 
 def _resolve(path: str) -> str:

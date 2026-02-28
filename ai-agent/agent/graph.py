@@ -9,7 +9,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 
 from agent.state import AgentState
-from agent.tools import ALL_TOOLS, set_workspace_root
+from agent.tools import ALL_TOOLS, set_workspace_root, set_is_running
 
 _llm = ChatBedrockConverse(
     model="anthropic.claude-3-haiku-20240307-v1:0",
@@ -97,11 +97,13 @@ def route_after_trigger(state: AgentState) -> Literal["notify_start", "notify_st
 
 def notify_start(state: AgentState) -> dict:
     """走行開始トリガーを記録する（VS Code側への通知口）"""
+    set_is_running(True)
     return {"agent_response": "🏃 走行開始を検知しました。AIエージェントを起動します。"}
 
 
 def notify_stop(state: AgentState) -> dict:
     """走行終了トリガーを記録する（VS Code側への通知口）"""
+    set_is_running(False)
     return {"agent_response": "🛑 走行終了を検知しました。AIエージェントを停止します。"}
 
 
