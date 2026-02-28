@@ -14,9 +14,9 @@ _REGION = os.environ.get("AWS_BEDROCK_REGION", os.environ.get("AWS_REGION", "us-
 
 # モデルティアとモデルIDのマッピング
 _MODEL_IDS = {
-    "haiku":  "anthropic.claude-haiku-4-5-20251001-v1:0",
-    "sonnet": "anthropic.claude-sonnet-4-5-20250929-v1:0",
-    "opus":   "anthropic.claude-opus-4-5-20251101-v1:0",
+    "haiku":  "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "sonnet": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "opus":   "us.anthropic.claude-opus-4-5-20251101-v1:0",
     # 旧世代（フォールバック用）
     "haiku-3":  "anthropic.claude-3-haiku-20240307-v1:0",
     "sonnet-3": "anthropic.claude-3-5-sonnet-20241022-v2:0",
@@ -49,7 +49,7 @@ async def _invoke_agent(prompt: str, tier: str) -> str:
             return response.content or ""
         tool_node = ToolNode(FILE_TOOLS)
         tool_result = await tool_node.ainvoke({"messages": messages})
-        messages = tool_result["messages"]
+        messages = messages + tool_result["messages"]
 
 
 async def planner_node(state: DevAgentState) -> dict:
