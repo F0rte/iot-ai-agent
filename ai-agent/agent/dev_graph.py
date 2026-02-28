@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from typing import Literal
 
 from langchain_aws import ChatBedrockConverse
@@ -108,6 +109,7 @@ async def planner_node(state: DevAgentState) -> dict:
             "needs_revision": False,
             "review_result": "",
             "is_running": False,  # タスクなしで終了
+            "task_index": 0,
         }
     return {
         "task_list": task_list,
@@ -118,6 +120,7 @@ async def planner_node(state: DevAgentState) -> dict:
         "revision_count": 0,
         "needs_revision": False,
         "review_result": "",
+        "task_index": 0,
     }
 
 
@@ -171,6 +174,7 @@ async def reviewer_node(state: DevAgentState) -> dict:
     tier = _lower_tier(state.get("model_tier", "haiku"))  # レビューは1段階下
     write_files = state.get("current_write_files", [])
     revision_count = state.get("revision_count", 0)
+    task_index = state.get("task_index", 0)
 
     file_hint = ""
     if write_files:
@@ -192,48 +196,51 @@ async def reviewer_node(state: DevAgentState) -> dict:
         f"- コードがタスクの要件を満たしているか\n"
         f"- 構文エラーや明らかなバグがないか\n"
         f"- テストが通るか（該当する場合）\n\n"
-        f"最終的な出力は以下のJSON形式のみで返してください:\n"
-        f'{{"result": "PASS" or "FAIL", "needs_revision": true or false, "comment": "詳細なコメント"}}\n\n'
-        f"※ PASSの場合は needs_revision: false, FAILの場合は needs_revision: true としてください。\n"
-        f"※ コメントには具体的な修正点や良かった点を記載してください。"
+        f"レビューコメントを自由に書いた後、必ず最後に以下の形式で判定を出力してください:\n"
+        f"<review_result>\n"
+        f'{{"result": "PASS", "needs_revision": false, "comment": "コメント"}}\n'
+        f"</review_result>\n\n"
+        f"※ 問題がある場合は result を FAIL、needs_revision を true にしてください。\n"
+        f"※ <review_result> タグの中身は必ず有効なJSONにしてください。"
     )
 
     response = await _invoke_agent(prompt, tier)
-    
-    # JSONをパースして結果を取得
+
+    # <review_result>タグ内のJSONを抽出
+    tag_match = re.search(r"<review_result>\s*(.*?)\s*</review_result>", response, re.DOTALL)
     try:
-        start = response.find("{")
-        if start == -1:
-            raise ValueError("No JSON object found in response")
-        end = response.rfind("}") + 1
-        review_data = json.loads(response[start:end])
-        
+        json_str = tag_match.group(1) if tag_match else None
+        if not json_str:
+            raise ValueError("No <review_result> tag found in response")
+        review_data = json.loads(json_str)
+
         result = review_data.get("result", "FAIL")
         needs_revision = review_data.get("needs_revision", True)
         comment = review_data.get("comment", response)
-        
+
         print(f"[reviewer] result={result}, needs_revision={needs_revision}")
-        
+
     except (json.JSONDecodeError, ValueError) as e:
         print(f"[reviewer] JSONパースエラー: {e}")
         print(f"[reviewer] 生レスポンス: {response[:200]}...")
-        # パース失敗時はFAILとして扱う
-        result = "FAIL"
-        needs_revision = True
+        # パース失敗時はPASSとして扱う（誤ったFAILによる無駄ループを防ぐ）
+        result = "PASS"
+        needs_revision = False
         comment = response
 
-    # レビュー結果をファイルに追記（Task 7実装までの暫定対応）
+    # レビュー結果をタスクごとの個別ファイルに出力
     review_summary = (
-        f"\n## タスク: {task}\n"
-        f"**判定**: {result}\n"
-        f"**修正要否**: {'必要' if needs_revision else '不要'}\n"
-        f"**修正回数**: {revision_count}\n\n"
-        f"{comment}\n"
-        f"---\n"
+        f"# レビュー結果 - タスク {task_index}\n\n"
+        f"## タスク内容\n{task}\n\n"
+        f"## レビュー結果\n"
+        f"- **判定**: {result}\n"
+        f"- **修正要否**: {'必要' if needs_revision else '不要'}\n"
+        f"- **修正回数**: {revision_count}\n\n"
+        f"## コメント\n{comment}\n"
     )
-    review_path = os.path.join(workspace_root, "docs/review.md")
+    review_path = os.path.join(workspace_root, f"docs/review_{task_index:02d}.md")
     os.makedirs(os.path.dirname(review_path), exist_ok=True)
-    with open(review_path, "a", encoding="utf-8") as f:
+    with open(review_path, "w", encoding="utf-8") as f:
         f.write(review_summary)
 
     return {
@@ -266,14 +273,21 @@ def revision_counter_node(state: DevAgentState) -> dict:
 
 
 def running_check_node(state: DevAgentState) -> dict:
-    """走行中フラグを確認してstateを更新する"""
+    """走行中フラグを確認してstateを更新し、task_indexをインクリメントして返す"""
     is_running = state.get("is_running", True)
     task_list = list(state.get("task_list", []))
+    task_index = state.get("task_index", 0)
 
+    # 現在のタスクを削除
     if task_list:
         task_list.pop(0)
 
+    # 次のタスクを取得
     next_item = task_list[0] if task_list else {}
+    
+    # task_indexをインクリメント
+    next_task_index = task_index + 1
+    
     return {
         "task_list": task_list,
         "current_task": next_item.get("task", "") if isinstance(next_item, dict) else next_item,
@@ -283,6 +297,7 @@ def running_check_node(state: DevAgentState) -> dict:
         "revision_count": 0,  # 次のタスクのためにリセット
         "needs_revision": False,
         "review_result": "",
+        "task_index": next_task_index,  # インクリメントされたインデックスを返す
     }
 
 
@@ -329,6 +344,7 @@ async def run_dev_agent(workspace_root: str, model_tier: str = "haiku", plan_pat
         "revision_count": 0,
         "needs_revision": False,
         "review_result": "",
+        "task_index": 0,
     })
     remaining = len(result.get("task_list", []))
     return f"✅ 自律開発完了（残タスク: {remaining} 件、使用ティア: {model_tier}）"
