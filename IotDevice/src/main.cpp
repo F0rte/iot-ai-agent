@@ -10,6 +10,9 @@
 #include <WiFi.h>
 #include <Update.h>
 #include <Preferences.h>
+#include <Wire.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
@@ -27,6 +30,15 @@
 // Wi-Fi
 #define WIFI_SSID_MAX 32
 #define WIFI_PASS_MAX 64
+
+// I2C / MPU6050
+#define MPU6050_SDA_PIN 13
+#define MPU6050_SCL_PIN 12
+#define SENSOR_SEND_INTERVAL_MS 100
+#define SENSOR_ERROR_NOTIFY_INTERVAL_MS 1000
+
+// LED
+#define LED_PIN 7
 
 // NVS Namespace
 const char *NVS_WIFI_NS = "wifi";
@@ -95,8 +107,13 @@ size_t ota_expected_size = 0;
 size_t ota_received_size = 0;
 size_t ota_last_reported_size = 0;
 bool ota_in_progress = false;
+bool ota_finalize_requested = false;
+bool ota_abort_requested = false;
 
 bool ble_device_connected = false;
+
+Adafruit_MPU6050 mpu;
+bool mpu_initialized = false;
 
 // =============================================================================
 // Utility Functions
@@ -110,8 +127,8 @@ void log_println(const char *msg)
         Serial.flush();
     }
 
-    // Send via BLE if connected (real-time only)
-    if (ble_device_connected && pDebugLogTx)
+    // Send via BLE if connected (real-time only) - but NOT during OTA
+    if (ble_device_connected && pDebugLogTx && !ota_in_progress)
     {
         size_t len = strlen(msg);
         if (len > 0)
@@ -172,6 +189,24 @@ const char *wifi_mgr_get_ip_str(void)
     return g_state.wifi_ip;
 }
 
+bool sensor_init_mpu6050(void)
+{
+    Wire.begin(MPU6050_SDA_PIN, MPU6050_SCL_PIN);
+
+    if (!mpu.begin())
+    {
+        log_println("[E] MPU6050 not found. Check wiring and power");
+        return false;
+    }
+
+    mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
+    mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+    mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+
+    log_println("[I] MPU6050 initialized");
+    return true;
+}
+
 // =============================================================================
 // BLE Callback Classes
 // =============================================================================
@@ -182,6 +217,16 @@ class MyServerCallbacks : public BLEServerCallbacks
     {
         ble_device_connected = true;
         log_println("[I] BLE device connected");
+
+        // Send initial status immediately on connection
+        delay(100); // Give BLE stack time to settle
+
+        char status[128];
+        snprintf(status, sizeof(status), "[STATUS] MPU6050=%s, WIFI=%d, OTA=%s",
+                 mpu_initialized ? "OK" : "NOT_FOUND",
+                 g_state.wifi_state,
+                 ota_mode_active ? "ACTIVE" : "IDLE");
+        log_println(status);
     }
 
     void onDisconnect(BLEServer *pServer)
@@ -343,6 +388,8 @@ class OtaControlCallbacks : public BLECharacteristicCallbacks
             ota_received_size = 0;
             ota_last_reported_size = 0;
             ota_in_progress = true;
+            ota_finalize_requested = false;
+            ota_abort_requested = false;
 
             if (!Update.begin(size, U_FLASH))
             {
@@ -377,54 +424,26 @@ class OtaControlCallbacks : public BLECharacteristicCallbacks
                 return;
             }
 
-            log_println("[OTA] Finalizing update...");
-
-            if (Update.end(true))
+            if (ota_received_size != ota_expected_size)
             {
-                Serial.printf("[OTA] Update Success: %u bytes\n", ota_received_size);
-                log_println("[I] OTA update successful!");
-                ota_in_progress = false;
-                ota_mode_active = false;
-
+                char err[64];
+                snprintf(err, sizeof(err), "[E] OTA incomplete: %u / %u", ota_received_size, ota_expected_size);
+                log_println(err);
                 if (pOtaStatus)
                 {
-                    pOtaStatus->setValue("SUCCESS");
+                    pOtaStatus->setValue("ERROR:INCOMPLETE");
                     pOtaStatus->notify();
                 }
-
-                delay(1000);
-                log_println("[I] Rebooting...");
-                delay(500);
-                ESP.restart();
+                return;
             }
-            else
-            {
-                Update.printError(Serial);
-                log_println("[E] Update.end() failed");
-                ota_in_progress = false;
 
-                if (pOtaStatus)
-                {
-                    pOtaStatus->setValue("ERROR:END_FAILED");
-                    pOtaStatus->notify();
-                }
-            }
+            log_println("[OTA] Finalize requested - will process in main loop");
+            ota_finalize_requested = true;
         }
         else if (command == "ABORT")
         {
-            log_println("[W] OTA aborted by user");
-            if (ota_in_progress)
-            {
-                Update.abort();
-                ota_in_progress = false;
-            }
-            ota_mode_active = false;
-
-            if (pOtaStatus)
-            {
-                pOtaStatus->setValue("ABORTED");
-                pOtaStatus->notify();
-            }
+            log_println("[W] OTA abort requested by user");
+            ota_abort_requested = true;
         }
     }
 };
@@ -448,6 +467,21 @@ class OtaDataCallbacks : public BLECharacteristicCallbacks
             return;
         }
 
+        if (ota_received_size + len > ota_expected_size)
+        {
+            log_println("[E] OTA data overflow (received more than expected)");
+            Update.abort();
+            ota_in_progress = false;
+            ota_mode_active = false;
+
+            if (pOtaStatus)
+            {
+                pOtaStatus->setValue("ERROR:OVERFLOW");
+                pOtaStatus->notify();
+            }
+            return;
+        }
+
         // Write data to flash
         size_t written = Update.write((uint8_t *)rxValue.data(), len);
         if (written != len)
@@ -467,7 +501,7 @@ class OtaDataCallbacks : public BLECharacteristicCallbacks
 
         ota_received_size += written;
 
-        // Progress notification every 100KB or at completion
+        // Progress notification every 100KB or at completion (reduce overhead)
         if (ota_received_size - ota_last_reported_size >= 102400 || ota_received_size == ota_expected_size)
         {
             ota_last_reported_size = ota_received_size;
@@ -475,7 +509,8 @@ class OtaDataCallbacks : public BLECharacteristicCallbacks
                           ota_received_size, ota_expected_size,
                           (ota_received_size * 100.0) / ota_expected_size);
 
-            if (pOtaStatus)
+            // Only notify progress occasionally to reduce BLE stack load
+            if (pOtaStatus && (ota_received_size % 204800 == 0 || ota_received_size == ota_expected_size))
             {
                 char progress[32];
                 snprintf(progress, sizeof(progress), "PROGRESS:%u/%u",
@@ -550,6 +585,7 @@ void setup_ble_ota_service(void)
         BLECharacteristic::PROPERTY_WRITE |
             BLECharacteristic::PROPERTY_WRITE_NR);
     pOtaData->setCallbacks(new OtaDataCallbacks());
+    pOtaData->setValue((uint8_t *)"", 0); // Initialize empty
 
     // OTA Status (Read/Notify) - for progress and status updates
     pOtaStatus = pOtaService->createCharacteristic(
@@ -567,6 +603,10 @@ void init_ble(void)
 {
     log_println("[I] Starting BLE device init...");
     BLEDevice::init("ESP32-S3-MICON");
+
+    // Request larger MTU for better OTA throughput
+    BLEDevice::setMTU(517);
+
     log_println("[I] BLE device initialized");
 
     delay(100);
@@ -760,6 +800,13 @@ void setup()
     log_println("[Setup] Initializing WiFi...");
     wifi_mgr_init();
 
+    // Setup LED pin
+    pinMode(LED_PIN, OUTPUT);
+    digitalWrite(LED_PIN, LOW);
+
+    log_println("[Setup] Initializing MPU6050...");
+    mpu_initialized = sensor_init_mpu6050();
+
     delay(500); // Give time for WiFi stack to initialize
 
     log_println("[Setup] Initializing BLE...");
@@ -782,11 +829,73 @@ void setup()
 
 void loop()
 {
+    // Handle OTA finalization request (moved from BLE callback to avoid stack issues)
+    if (ota_finalize_requested)
+    {
+        ota_finalize_requested = false;
+
+        log_println("[OTA] Finalizing update...");
+        Serial.printf("[OTA] Received: %u bytes / Expected: %u bytes\n", ota_received_size, ota_expected_size);
+
+        if (Update.end(true)) // true = do checksum validation
+        {
+            Serial.printf("[OTA] Update Success: %u bytes\n", ota_received_size);
+            log_println("[I] OTA update successful!");
+            ota_in_progress = false;
+            ota_mode_active = false;
+
+            if (pOtaStatus)
+            {
+                pOtaStatus->setValue("SUCCESS");
+                pOtaStatus->notify();
+            }
+
+            delay(1000);
+            log_println("[I] Rebooting...");
+            delay(500);
+            ESP.restart();
+        }
+        else
+        {
+            Serial.println("\n=== Update.end() FAILED ===");
+            Serial.printf("[OTA] ota_received_size = %u\n", ota_received_size);
+            Serial.printf("[OTA] ota_expected_size = %u\n", ota_expected_size);
+            Update.printError(Serial);
+            log_println("[E] Update.end() failed");
+            ota_in_progress = false;
+
+            if (pOtaStatus)
+            {
+                pOtaStatus->setValue("ERROR:END_FAILED");
+                pOtaStatus->notify();
+            }
+        }
+    }
+
+    // Handle OTA abort request
+    if (ota_abort_requested)
+    {
+        ota_abort_requested = false;
+        log_println("[W] OTA aborted by user");
+        if (ota_in_progress)
+        {
+            Update.abort();
+            ota_in_progress = false;
+        }
+        ota_mode_active = false;
+
+        if (pOtaStatus)
+        {
+            pOtaStatus->setValue("ABORTED");
+            pOtaStatus->notify();
+        }
+    }
+
     // If OTA mode is active, stop normal app operation
     if (ota_mode_active)
     {
         // Only handle BLE and OTA processing
-        delay(100);
+        delay(10); // Reduced delay for faster response
         return;
     }
 
@@ -816,6 +925,47 @@ void loop()
                      g_state.wifi_ip);
             pDebugStat->setValue((uint8_t *)stat_str, strlen(stat_str));
             pDebugStat->notify();
+        }
+    }
+
+    // Send acceleration data every 0.1s over BLE as CSV: ax,ay,az
+    static unsigned long last_sensor_send = 0;
+    static unsigned long last_sensor_error_notify = 0;
+
+    if (millis() - last_sensor_send >= SENSOR_SEND_INTERVAL_MS)
+    {
+        last_sensor_send = millis();
+
+        if (mpu_initialized && ble_device_connected && pDebugLogTx)
+        {
+            sensors_event_t accel;
+            sensors_event_t gyro;
+            sensors_event_t temp;
+            mpu.getEvent(&accel, &gyro, &temp);
+
+            char csv[64];
+            snprintf(csv, sizeof(csv), "%.3f,%.3f,%.3f",
+                     accel.acceleration.x,
+                     accel.acceleration.y,
+                     accel.acceleration.z);
+
+            // Blink LED when sending acceleration data
+            digitalWrite(LED_PIN, HIGH);
+            pDebugLogTx->setValue((uint8_t *)csv, strlen(csv));
+            pDebugLogTx->notify();
+            delay(10);
+            digitalWrite(LED_PIN, LOW);
+        }
+        else if (!mpu_initialized && ble_device_connected && pDebugLogTx)
+        {
+            // Send error notification every 1s (throttled)
+            if (millis() - last_sensor_error_notify >= SENSOR_ERROR_NOTIFY_INTERVAL_MS)
+            {
+                last_sensor_error_notify = millis();
+                const char *err = "[E] MPU6050_NOT_FOUND";
+                pDebugLogTx->setValue((uint8_t *)err, strlen(err));
+                pDebugLogTx->notify();
+            }
         }
     }
 
