@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import subprocess
 import uuid
 
 from awscrt import auth, mqtt
@@ -10,6 +11,7 @@ from api.events import broadcast
 
 _loop: asyncio.AbstractEventLoop | None = None
 _mqtt_connection = None
+_workspace_root: str = ""
 TOPIC = "hackathon/run/test"
 
 
@@ -33,9 +35,9 @@ async def _handle_message(topic: str, message: dict) -> None:
     # IoT 受信イベントをまず配信
     await broadcast({"type": "iot", "topic": topic, "data": message})
 
-    # LangGraph エージェントで処理
+    # LangGraph エージェントで処理（workspace_rootを渡す）
     try:
-        response = await run_agent(message)
+        response = await run_agent(message, workspace_root=_workspace_root)
         await broadcast({"type": "agent", "response": response})
     except Exception as e:
         print(f"[subscriber] agent error: {e}")
@@ -51,9 +53,30 @@ def _on_connection_resumed(connection, return_code, session_present, **kwargs):
 
 
 def setup(loop: asyncio.AbstractEventLoop) -> None:
-    global _loop, _mqtt_connection
+    global _loop, _mqtt_connection, _workspace_root
 
     _loop = loop
+
+    # git rev-parse --show-toplevel を実行してリポジトリルートを取得
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
+        )
+        _workspace_root = result.stdout.strip()
+        print(f"[subscriber] workspace_root: {_workspace_root}")
+    except subprocess.CalledProcessError as e:
+        print(f"[subscriber] git rev-parse failed: {e.stderr}")
+        _workspace_root = ""
+    except FileNotFoundError:
+        print("[subscriber] git command not found")
+        _workspace_root = ""
+    except Exception as e:
+        print(f"[subscriber] error getting workspace_root: {e}")
+        _workspace_root = ""
 
     endpoint = os.environ["AWS_IOT_ENDPOINT"]
     region = os.environ.get("AWS_REGION", "ap-northeast-1")
