@@ -7,7 +7,8 @@ class AgentState(TypedDict):
     iot_message: dict
     agent_response: str
     sensor_type: str
-    trigger: str  # "running_start" | "running_stop" | "none"
+    trigger: str        # "running_start" | "running_stop" | "none"
+    model_tier: str     # "haiku" | "sonnet" | "opus"（走行強度で決定）
     messages: Annotated[list[BaseMessage], add_messages]
     workspace_root: str  # ファイル操作の基準ディレクトリ
 
@@ -15,6 +16,7 @@ class AgentState(TypedDict):
 class DevAgentState(TypedDict):
     """自律開発マルチエージェント用のstate"""
     workspace_root: str
+    model_tier: str         # "haiku" | "sonnet" | "opus"
     task_list: list[str]    # planner が生成したタスク一覧
     current_task: str       # 現在処理中のタスク
     is_running: bool        # 走行中フラグ

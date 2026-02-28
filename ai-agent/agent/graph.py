@@ -64,7 +64,7 @@ def route_after_classify(state: AgentState) -> Literal["trigger_check", "agent"]
 
 
 def trigger_check(state: AgentState) -> dict:
-    """加速度の合成値から走行状態を判定し、状態遷移でtriggerを決定する"""
+    """加速度の合成値から走行状態を判定し、状態遷移でtriggerとmodel_tierを決定する"""
     global _prev_running
     msg = state["iot_message"]
     acc = msg.get("acceleration", {})
@@ -83,7 +83,16 @@ def trigger_check(state: AgentState) -> dict:
         trigger = "none"
 
     _prev_running = is_running
-    return {"trigger": trigger}
+
+    # 走行強度からモデルティアを決定
+    if magnitude >= 18.0:
+        model_tier = "opus"
+    elif magnitude >= _RUNNING_THRESHOLD:
+        model_tier = "sonnet"
+    else:
+        model_tier = "haiku"
+
+    return {"trigger": trigger, "model_tier": model_tier}
 
 
 def route_after_trigger(state: AgentState) -> Literal["notify_start", "notify_stop", "agent"]:
@@ -100,13 +109,14 @@ async def notify_start(state: AgentState) -> dict:
     import asyncio
     set_is_running(True)
     workspace_root = state.get("workspace_root", "")
+    model_tier = state.get("model_tier", "haiku")
 
     # 自律開発エージェントをバックグラウンドで起動
     if workspace_root:
         try:
             from agent.dev_graph import run_dev_agent
-            asyncio.create_task(run_dev_agent(workspace_root))
-            print(f"[notify_start] 自律開発エージェント起動: {workspace_root}")
+            asyncio.create_task(run_dev_agent(workspace_root, model_tier=model_tier))
+            print(f"[notify_start] 自律開発エージェント起動: {workspace_root} (model_tier={model_tier})")
         except Exception as e:
             print(f"[notify_start] エージェント起動エラー: {e}")
 
@@ -187,6 +197,7 @@ async def run_agent(iot_message: dict, workspace_root: str = "") -> str:
         "agent_response": "",
         "sensor_type": "",
         "trigger": "none",
+        "model_tier": "haiku",
         "messages": [],
         "workspace_root": workspace_root,
     })

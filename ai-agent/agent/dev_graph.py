@@ -10,24 +10,39 @@ from langgraph.prebuilt import ToolNode
 from agent.state import DevAgentState
 from agent.tools import FILE_TOOLS, get_is_running, set_workspace_root
 
-_llm = ChatBedrockConverse(
-    model="anthropic.claude-3-haiku-20240307-v1:0",
-    region_name=os.environ.get("AWS_BEDROCK_REGION", os.environ.get("AWS_REGION", "us-east-1")),
-)
-_llm_with_file_tools = _llm.bind_tools(FILE_TOOLS)
+_REGION = os.environ.get("AWS_BEDROCK_REGION", os.environ.get("AWS_REGION", "us-east-1"))
+
+# モデルティアとモデルIDのマッピング
+_MODEL_IDS = {
+    "haiku":  "anthropic.claude-3-haiku-20240307-v1:0",
+    "sonnet": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+    "opus":   "anthropic.claude-3-opus-20240229-v1:0",
+}
+_TIER_ORDER = ["haiku", "sonnet", "opus"]
 
 _PLAN_PATH = "docs/plan.md"
 
 
-async def _invoke_agent(prompt: str) -> str:
+def _get_llm(tier: str) -> ChatBedrockConverse:
+    model_id = _MODEL_IDS.get(tier, _MODEL_IDS["haiku"])
+    return ChatBedrockConverse(model=model_id, region_name=_REGION)
+
+
+def _lower_tier(tier: str) -> str:
+    """1段階下のティアを返す（haiku の場合はそのまま）"""
+    idx = _TIER_ORDER.index(tier) if tier in _TIER_ORDER else 0
+    return _TIER_ORDER[max(0, idx - 1)]
+
+
+async def _invoke_agent(prompt: str, tier: str) -> str:
     """単一ターンのエージェント呼び出し（ツールループ付き）"""
+    llm_with_tools = _get_llm(tier).bind_tools(FILE_TOOLS)
     messages = [HumanMessage(content=prompt)]
     while True:
-        response = await _llm_with_file_tools.ainvoke(messages)
+        response = await llm_with_tools.ainvoke(messages)
         messages.append(response)
         if not response.tool_calls:
             return response.content or ""
-        # ツール呼び出しを実行
         tool_node = ToolNode(FILE_TOOLS)
         tool_result = await tool_node.ainvoke({"messages": messages})
         messages = tool_result["messages"]
@@ -36,19 +51,19 @@ async def _invoke_agent(prompt: str) -> str:
 async def planner_node(state: DevAgentState) -> dict:
     """plan.md を読み込み、タスクリストを生成する（1回だけ実行）"""
     workspace_root = state.get("workspace_root", "")
-    plan_path = _PLAN_PATH
+    tier = state.get("model_tier", "haiku")
 
     prompt = (
         f"あなたは自律開発エージェントのプランナーです。\n"
         f"ワークスペース: {workspace_root}\n\n"
-        f"まず `{plan_path}` を read_file で読み込み、実装すべきタスクをリストアップしてください。\n"
+        f"まず `{_PLAN_PATH}` を read_file で読み込み、実装すべきタスクをリストアップしてください。\n"
         f"最終的な出力は以下のJSON形式のみで返してください（余分な説明不要）:\n"
         f'[\"タスク1\", \"タスク2\", \"タスク3\"]'
     )
 
-    response = await _invoke_agent(prompt)
+    print(f"[planner] model_tier={tier} ({_MODEL_IDS.get(tier)})")
+    response = await _invoke_agent(prompt, tier)
 
-    # JSONリストをパース
     try:
         start = response.find("[")
         if start == -1:
@@ -71,7 +86,9 @@ async def coder_node(state: DevAgentState) -> dict:
     """current_task を実装しファイルに書き込む"""
     task = state.get("current_task", "")
     workspace_root = state.get("workspace_root", "")
+    tier = state.get("model_tier", "haiku")
 
+    print(f"[coder] model_tier={tier} ({_MODEL_IDS.get(tier)})")
     prompt = (
         f"あなたは自律開発エージェントのコーダーです。\n"
         f"ワークスペース: {workspace_root}\n\n"
@@ -82,7 +99,7 @@ async def coder_node(state: DevAgentState) -> dict:
         f"実装後は run_shell でテストやビルドを実行して動作確認してください。"
     )
 
-    response = await _invoke_agent(prompt)
+    await _invoke_agent(prompt, tier)
     return {"messages": []}
 
 
@@ -90,7 +107,9 @@ async def reviewer_node(state: DevAgentState) -> dict:
     """実装コードをレビューし結果をファイルに書き出す"""
     task = state.get("current_task", "")
     workspace_root = state.get("workspace_root", "")
+    tier = _lower_tier(state.get("model_tier", "haiku"))  # レビューは1段階下
 
+    print(f"[reviewer] model_tier={tier} ({_MODEL_IDS.get(tier)})")
     prompt = (
         f"あなたは自律開発エージェントのレビュアーです。\n"
         f"ワークスペース: {workspace_root}\n\n"
@@ -100,7 +119,7 @@ async def reviewer_node(state: DevAgentState) -> dict:
         f"レビュー結果を write_file で `docs/review.md` に追記形式で書き出してください。"
     )
 
-    response = await _invoke_agent(prompt)
+    await _invoke_agent(prompt, tier)
     return {"messages": []}
 
 
@@ -109,7 +128,6 @@ def running_check_node(state: DevAgentState) -> dict:
     is_running = get_is_running()
     task_list = list(state.get("task_list", []))
 
-    # 完了したタスクをリストから除去
     if task_list:
         task_list.pop(0)
 
@@ -144,15 +162,16 @@ _builder.add_conditional_edges("running_check", should_continue_dev)
 dev_graph = _builder.compile()
 
 
-async def run_dev_agent(workspace_root: str, plan_path: str = _PLAN_PATH) -> str:
+async def run_dev_agent(workspace_root: str, model_tier: str = "haiku", plan_path: str = _PLAN_PATH) -> str:
     """走行開始トリガーで呼び出す自律開発エージェントのエントリーポイント"""
     set_workspace_root(workspace_root)
     result = await dev_graph.ainvoke({
         "workspace_root": workspace_root,
+        "model_tier": model_tier,
         "task_list": [],
         "current_task": "",
         "is_running": True,
         "messages": [],
     })
-    completed = len(result.get("task_list", []))
-    return f"✅ 自律開発完了（残タスク: {completed} 件）"
+    remaining = len(result.get("task_list", []))
+    return f"✅ 自律開発完了（残タスク: {remaining} 件、使用ティア: {model_tier}）"

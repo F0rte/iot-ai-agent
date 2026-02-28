@@ -1,6 +1,7 @@
 # AI Agent
 
-IoTデバイスからのデータを受信し、LangGraph + AWS Bedrockで処理する自律型AIエージェント。
+Apple Watch の走行検知をトリガーに、**planner → coder → reviewer** のマルチエージェントが  
+`docs/plan.md` を読んでタスクを分解し、コードの実装・レビューを人間なしに自律的に進める。
 
 ---
 
@@ -18,7 +19,6 @@ cp .env.example .env
 AWS_ACCESS_KEY_ID=AKIAXXXXXXXXXXXXXXXX
 AWS_SECRET_ACCESS_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 AWS_REGION=us-east-1
-AWS_IOT_ENDPOINT=xxxxx.iot.ap-northeast-1.amazonaws.com
 AWS_BEDROCK_REGION=us-east-1
 ```
 
@@ -32,52 +32,52 @@ uv sync
 
 ## 🧪 ローカルテスト（サーバー不要）
 
-IoT接続やサーバー起動なしで、エージェントの動作を確認できます。
+### IoTトリガーテスト
+
+走行開始・終了のトリガー検知とセンサー分類を確認します。
 
 ```bash
 uv run python test_agent.py
 ```
 
-このスクリプトは：
-- モックデータでLangGraphエージェントを呼び出し
-- Bedrock APIにリクエストを送信
-- エージェントの応答を表示
+### 自律開発エージェントを直接実行
 
-**必要な権限**:
-- AWS Bedrockへのアクセス権限（`bedrock:InvokeModel`）
-- インターネット接続
+`docs/plan.md` を用意すれば、IoTトリガーなしに自律開発を試せます。
+
+```python
+import asyncio
+from agent.dev_graph import run_dev_agent
+
+asyncio.run(run_dev_agent(workspace_root="/path/to/your/project"))
+```
 
 ---
 
-## 🌐 サーバーモード（本番・開発）
+## 🤖 アーキテクチャ
 
-FastAPI + SSEでリアルタイムイベントを配信します。
+### IoTトリガー処理（`agent/graph.py`）
 
-### サーバー起動
-
-```bash
-uv run uvicorn main:app --reload
+```
+IoTメッセージ受信
+  └─ classify（センサー種別判定: motion / heart_rate / unknown）
+        ├─ motion → trigger_check（加速度から走行状態を判定）
+        │     ├─ running_start → notify_start → 自律開発エージェント起動
+        │     ├─ running_stop  → notify_stop  → 走行フラグをOFFに
+        │     └─ none          → END
+        └─ heart_rate / unknown → agent（LLM + ToolNode ReAct）→ END
 ```
 
-### 動作確認
+### 自律開発エージェント（`agent/dev_graph.py`）
 
-1. **ヘルスチェック**
-   ```bash
-   curl http://localhost:8000/
-   ```
-
-2. **SSEエンドポイント**
-   ```bash
-   curl http://localhost:8000/events
-   ```
-
-3. **テストメッセージ送信**（AWS IoT Core経由）
-   ```bash
-   aws iot-data publish \
-     --topic "hackathon/run/test" \
-     --payload '{"message": "test", "timestamp": "2026-02-28T12:00:00Z"}' \
-     --endpoint-url https://xxxxx.iot.ap-northeast-1.amazonaws.com
-   ```
+```
+run_dev_agent(workspace_root) が呼ばれると:
+  └─ planner（docs/plan.md を読んでタスクに分解）
+        ↓
+     ループ（タスクがある & 走行中の間）:
+       ├─ coder    （1タスク分のコードを実装・write_file で書き込み）
+       ├─ reviewer （実装をレビュー・docs/review.md に書き出し）
+       └─ running_check（走行継続 → 次タスクへ / 停止 → END）
+```
 
 ---
 
@@ -86,10 +86,12 @@ uv run uvicorn main:app --reload
 ```
 ai-agent/
 ├── main.py              # FastAPIサーバーのエントリポイント
-├── test_agent.py        # ローカルテストスクリプト
+├── test_agent.py        # IoTトリガーのローカルテストスクリプト
 ├── agent/
-│   ├── graph.py         # LangGraphエージェント定義
-│   └── state.py         # エージェント状態の型定義
+│   ├── state.py         # AgentState / DevAgentState の型定義
+│   ├── graph.py         # IoTセンサー処理グラフ（トリガー検知）
+│   ├── dev_graph.py     # 自律開発マルチエージェントグラフ
+│   └── tools.py         # エージェントが使うツール群
 ├── iot/
 │   └── subscriber.py    # AWS IoT Core MQTTサブスクライバー
 ├── api/
@@ -101,12 +103,26 @@ ai-agent/
 
 ---
 
+## 🛠️ ツール一覧
+
+| ツール | 分類 | 内容 |
+|--------|------|------|
+| `save_record(sensor_type, data)` | センサー | データをインメモリに保存 |
+| `get_history(sensor_type, n)` | センサー | 直近n件の履歴を取得 |
+| `detect_anomaly(sensor_type, data)` | センサー | 閾値ベースの異常検知 |
+| `read_file(path)` | ファイル | ワークスペース内のファイルを読み込む |
+| `write_file(path, content)` | ファイル | ファイルを新規作成・上書き |
+| `list_files(directory)` | ファイル | ディレクトリのファイル一覧を取得 |
+| `run_shell(command, cwd)` | 実行 | シェルコマンドを実行（テスト・ビルド用） |
+
+---
+
 ## 🔧 技術スタック
 
 | レイヤー | 技術 |
 |---------|------|
-| 言語 | Python 3.13+ |
-| LLM | AWS Bedrock (Claude 3 Haiku) |
+| 言語 | Python 3.14+ |
+| LLM | AWS Bedrock (Claude 3 Haiku via Converse API) |
 | エージェント | LangGraph |
 | APIサーバー | FastAPI + Uvicorn |
 | IoT接続 | AWS IoT Device SDK v2 |
@@ -126,7 +142,7 @@ ai-agent/
       "Effect": "Allow",
       "Action": [
         "bedrock:InvokeModel",
-        "bedrock:InvokeModelWithResponseStream"
+        "bedrock:Converse"
       ],
       "Resource": "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-*"
     }
@@ -134,22 +150,15 @@ ai-agent/
 }
 ```
 
-### モデルアクセスのリクエスト
-
-1. [AWS Bedrock コンソール](https://console.aws.amazon.com/bedrock/) を開く
-2. **Model access** メニューを選択
-3. **Anthropic Claude** モデルへのアクセスをリクエスト
-4. 承認を待つ（通常は即時）
-
 ### 利用可能なモデル
 
 | モデル | Model ID | 用途 |
 |-------|----------|------|
-| Claude 3 Haiku | `anthropic.claude-3-haiku-20240307-v1:0` | 高速・低コスト |
-| Claude 3.5 Sonnet | `anthropic.claude-3-5-sonnet-20240620-v1:0` | バランス型 |
+| Claude 3 Haiku | `anthropic.claude-3-haiku-20240307-v1:0` | 高速・低コスト（デフォルト） |
+| Claude 3.5 Sonnet | `anthropic.claude-3-5-sonnet-20240620-v1:0` | バランス型（複雑な実装向け） |
 | Claude 3 Opus | `anthropic.claude-3-opus-20240229-v1:0` | 高性能 |
 
-モデルを変更する場合は `agent/graph.py` の `model_id` を編集してください。
+モデルを変更する場合は `agent/graph.py` と `agent/dev_graph.py` の `model` を編集してください。
 
 ---
 
@@ -172,7 +181,7 @@ AWS_SECRET_ACCESS_KEY=your_secret_key
 
 **解決策**:
 1. AWS Bedrockコンソールでモデルアクセスをリクエスト
-2. IAM権限で `bedrock:InvokeModel` を許可
+2. IAM権限で `bedrock:InvokeModel` と `bedrock:Converse` を許可
 
 ### エラー: `botocore.exceptions.EndpointConnectionError`
 
@@ -193,23 +202,3 @@ AWS_BEDROCK_REGION=us-east-1  # または us-west-2
 - [AWS IoT Core Developer Guide](https://docs.aws.amazon.com/iot/)
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 
----
-
-## 📝 開発メモ
-
-### IoT統合について
-
-現在、IoT周りは別の担当者が実装中です。
-ローカルテストスクリプト（`test_agent.py`）を使用してエージェントの動作確認を行ってください。
-
-### センサーデータ形式
-
-将来的に6軸IMUセンサー（加速度+角速度）データに対応予定：
-```json
-{
-  "acceleration": {"x": 0.12, "y": 9.81, "z": -0.05},
-  "gyroscope": {"x": 12.5, "y": -3.2, "z": 0.8}
-}
-```
-
-現在は任意のJSONデータで動作確認可能です。
