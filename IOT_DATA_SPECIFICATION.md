@@ -46,12 +46,12 @@
 
 ### Components
 
-| Component | Role | Technology |
-|-----------|------|------------|
-| **IoT Device** | Sensor data source (motion, heart rate) | Swift (iOS/watchOS SDK) or custom firmware |
-| **AWS IoT Core** | MQTT broker, message routing | AWS managed service |
-| **AI Agent** | Receives IoT data, processes with LLM | Python, FastAPI, LangGraph, Claude AI |
-| **VS Code Extension** | Displays real-time events, UI control | TypeScript, WebView API |
+| Component             | Role                                    | Technology                                 |
+| --------------------- | --------------------------------------- | ------------------------------------------ |
+| **IoT Device**        | Sensor data source (motion, heart rate) | Swift (iOS/watchOS SDK) or custom firmware |
+| **AWS IoT Core**      | MQTT broker, message routing            | AWS managed service                        |
+| **AI Agent**          | Receives IoT data, processes with LLM   | Python, FastAPI, LangGraph, Claude AI      |
+| **VS Code Extension** | Displays real-time events, UI control   | TypeScript, WebView API                    |
 
 ---
 
@@ -65,10 +65,10 @@ hackathon/run/{environment}
 
 ### Current Topics
 
-| Topic | Purpose | Publisher | Subscriber |
-|-------|---------|-----------|------------|
-| `hackathon/run/test` | Development/testing | IoT Device | AI Agent |
-| `hackathon/run/prod` | Production (reserved) | IoT Device | AI Agent |
+| Topic                | Purpose               | Publisher  | Subscriber |
+| -------------------- | --------------------- | ---------- | ---------- |
+| `hackathon/run/test` | Development/testing   | IoT Device | AI Agent   |
+| `hackathon/run/prod` | Production (reserved) | IoT Device | AI Agent   |
 
 ### Topic Design Notes
 
@@ -122,12 +122,12 @@ hackathon/run/{environment}
 
 #### Field Descriptions
 
-| Field | Type | Required | Description | Example |
-|-------|------|----------|-------------|---------|
-| `is_running` | boolean | ✅ Yes | Whether the user is currently running | `true`, `false` |
-| `bpm` | integer | ✅ Yes | Heart rate in beats per minute | `135` |
-| `timestamp` | string | ❌ No | ISO 8601 timestamp when data was captured | `"2026-02-28T10:30:00Z"` |
-| `device_id` | string | ❌ No | Unique identifier for the device | `"swift-client-a1b2c3d4"` |
+| Field        | Type    | Required | Description                               | Example                   |
+| ------------ | ------- | -------- | ----------------------------------------- | ------------------------- |
+| `is_running` | boolean | ✅ Yes   | Whether the user is currently running     | `true`, `false`           |
+| `bpm`        | integer | ✅ Yes   | Heart rate in beats per minute            | `135`                     |
+| `timestamp`  | string  | ❌ No    | ISO 8601 timestamp when data was captured | `"2026-02-28T10:30:00Z"`  |
+| `device_id`  | string  | ❌ No    | Unique identifier for the device          | `"swift-client-a1b2c3d4"` |
 
 #### Validation Rules
 
@@ -139,6 +139,7 @@ hackathon/run/{environment}
 #### Example Messages
 
 **Minimal (current implementation)**:
+
 ```json
 {
   "is_running": true,
@@ -147,6 +148,7 @@ hackathon/run/{environment}
 ```
 
 **Complete**:
+
 ```json
 {
   "is_running": true,
@@ -157,6 +159,7 @@ hackathon/run/{environment}
 ```
 
 **Running stopped**:
+
 ```json
 {
   "is_running": false,
@@ -253,6 +256,7 @@ Keep-alive message (ignored by client).
 ### IoT Device Connection
 
 #### Authentication
+
 - **Method**: AWS IAM Static Credentials
 - **Required Credentials**:
   - `AWS_ACCESS_KEY_ID`
@@ -260,6 +264,7 @@ Keep-alive message (ignored by client).
   - `AWS_IOT_ENDPOINT` (e.g., `xxxxx.iot.ap-northeast-1.amazonaws.com`)
 
 #### Connection Parameters
+
 - **Protocol**: MQTT over WebSockets
 - **Region**: `ap-northeast-1` (Tokyo)
 - **Client ID Format**: `swift-client-{UUID_PREFIX}` or `custom-device-{UUID}`
@@ -267,6 +272,7 @@ Keep-alive message (ignored by client).
 - **Keep Alive**: 30 seconds (configurable)
 
 #### Swift (iOS/watchOS) Example
+
 ```swift
 let clientId = "swift-client-\(UUID().uuidString.prefix(8))"
 iotDataManager?.connectUsingWebSocket(
@@ -278,6 +284,7 @@ iotDataManager?.connectUsingWebSocket(
 ```
 
 #### Generic MQTT Client Example
+
 ```python
 # Using paho-mqtt or similar
 client_id = f"custom-device-{uuid.uuid4().hex[:8]}"
@@ -305,6 +312,7 @@ AWS_SECRET_ACCESS_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 #### Connection Parameters
+
 - **Protocol**: MQTT over WebSockets with AWS SigV4 signing
 - **Client ID**: `ai-agent-{RANDOM_HEX}` (8 characters)
 - **Clean Session**: `true`
@@ -320,7 +328,7 @@ AWS_SECRET_ACCESS_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 **File**: `vscode-extension/src/panel.ts`
 
 ```javascript
-const es = new EventSource('http://localhost:8000/events');
+const es = new EventSource("http://localhost:8000/events");
 ```
 
 - **Protocol**: HTTP Server-Sent Events
@@ -334,26 +342,26 @@ const es = new EventSource('http://localhost:8000/events');
 
 ### Device-Side Errors
 
-| Error | Cause | Handling |
-|-------|-------|----------|
-| Connection Failed | Invalid credentials or endpoint | Retry with exponential backoff |
-| Publish Failed | Network issue or QoS=1 timeout | Log error, retry next data point |
-| Disconnected | Network interruption | Auto-reconnect via SDK |
+| Error             | Cause                           | Handling                         |
+| ----------------- | ------------------------------- | -------------------------------- |
+| Connection Failed | Invalid credentials or endpoint | Retry with exponential backoff   |
+| Publish Failed    | Network issue or QoS=1 timeout  | Log error, retry next data point |
+| Disconnected      | Network interruption            | Auto-reconnect via SDK           |
 
 ### AI Agent-Side Errors
 
-| Error | Cause | Handling |
-|-------|-------|----------|
-| JSON Parse Error | Invalid message format | Log error, send error event to extension |
-| LLM API Error | Bedrock/Anthropic API failure | Catch exception, broadcast error event |
-| Connection Lost | IoT Core disconnected | Auto-reconnect via SDK callback |
+| Error            | Cause                         | Handling                                 |
+| ---------------- | ----------------------------- | ---------------------------------------- |
+| JSON Parse Error | Invalid message format        | Log error, send error event to extension |
+| LLM API Error    | Bedrock/Anthropic API failure | Catch exception, broadcast error event   |
+| Connection Lost  | IoT Core disconnected         | Auto-reconnect via SDK callback          |
 
 ### VS Code Extension Errors
 
-| Error | Cause | Handling |
-|-------|-------|----------|
+| Error                 | Cause                | Handling                          |
+| --------------------- | -------------------- | --------------------------------- |
 | SSE Connection Failed | AI agent not running | Show error status, retry every 5s |
-| Invalid Event Data | Malformed JSON | Ignore event, log to console |
+| Invalid Event Data    | Malformed JSON       | Ignore event, log to console      |
 
 ---
 
@@ -472,10 +480,12 @@ mosquitto_pub \
 ## 📚 Additional Resources
 
 ### AWS IoT Core Documentation
+
 - [AWS IoT Core WebSocket Connection](https://docs.aws.amazon.com/iot/latest/developerguide/protocols.html#mqtt-ws)
 - [MQTT Topic Design Best Practices](https://docs.aws.amazon.com/whitepapers/latest/designing-mqtt-topics-aws-iot-core/designing-mqtt-topics-aws-iot-core.html)
 
 ### Project-Specific Files
+
 - **AI Agent Subscriber**: `ai-agent/iot/subscriber.py`
 - **Swift App Publisher**: `watch-app/AgentController/AgentController/ContentView.swift`
 - **VS Code Extension**: `vscode-extension/src/panel.ts`
@@ -484,9 +494,9 @@ mosquitto_pub \
 
 ## 🔄 Version History
 
-| Version | Date | Changes |
-|---------|------|---------|
-| 1.0.0 | 2026-02-28 | Initial specification based on current implementation |
+| Version | Date       | Changes                                               |
+| ------- | ---------- | ----------------------------------------------------- |
+| 1.0.0   | 2026-02-28 | Initial specification based on current implementation |
 
 ---
 
