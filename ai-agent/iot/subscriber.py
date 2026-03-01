@@ -1,8 +1,11 @@
 import asyncio
 import json
+import logging
 import os
 import subprocess
 import uuid
+
+logger = logging.getLogger(__name__)
 
 from awscrt import auth, mqtt
 from awsiot import mqtt_connection_builder
@@ -31,6 +34,7 @@ async def _handle_message(topic: str, message: dict) -> None:
     from agent.graph import run_agent
 
     print(f"[subscriber] received: topic={topic} data={message}")
+    logger.info(f"[subscriber] received: topic={topic} payload={json.dumps(message, ensure_ascii=False)}")
 
     # IoT 受信イベントをまず配信
     await broadcast({"type": "iot", "topic": topic, "data": message})
