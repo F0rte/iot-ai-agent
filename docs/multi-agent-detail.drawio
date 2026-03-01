@@ -1,0 +1,402 @@
+<mxfile host="app.diagrams.net" modified="2026-03-01T00:00:00.000Z" agent="Claude Code" version="24.0.0">
+  <diagram name="Multi-Agent Detail" id="multi-agent">
+    <mxGraphModel dx="1434" dy="844" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1200" math="0" shadow="0" background="#FFFFFF">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="Multi-Agent Development Flow (Planner → Coder → Reviewer)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="200" y="30" width="1000" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- START -->
+        <mxCell id="start" value="START" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4CAF50;strokeColor=#2E7D32;strokeWidth=2;fontColor=#FFFFFF;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="650" y="80" width="100" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- PLANNER Section -->
+        <mxCell id="planner-section" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#4CAF50;strokeWidth=2;dashed=1;dashPattern=8 8;" vertex="1" parent="1">
+          <mxGeometry x="80" y="160" width="380" height="340" as="geometry" />
+        </mxCell>
+
+        <mxCell id="planner-title" value="① Planner" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#4CAF50;" vertex="1" parent="1">
+          <mxGeometry x="95" y="170" width="200" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="planner-model" value="Model: Haiku/Sonnet/Opus" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="95" y="190" width="200" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="planner-step1" value="read_file(docs/plan.md)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4CAF50;strokeWidth=1.5;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="110" y="220" width="320" height="35" as="geometry" />
+        </mxCell>
+
+        <mxCell id="planner-step2" value="list_files(.) - プロジェクト構造把握" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4CAF50;strokeWidth=1.5;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="110" y="270" width="320" height="35" as="geometry" />
+        </mxCell>
+
+        <mxCell id="planner-step3" value="read_file(...) - 既存コード確認" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4CAF50;strokeWidth=1.5;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="110" y="320" width="320" height="35" as="geometry" />
+        </mxCell>
+
+        <mxCell id="planner-step4" value="タスク分解 → JSON生成" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4CAF50;strokeWidth=1.5;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="110" y="370" width="320" height="35" as="geometry" />
+        </mxCell>
+
+        <mxCell id="planner-output" value="Output: task_list&#xa;[{task, read_files, write_files}, ...]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#4CAF50;strokeWidth=1.5;fontSize=10;align=left;verticalAlign=top;fontFamily=Courier New;" vertex="1" parent="1">
+          <mxGeometry x="110" y="425" width="320" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- CODER Section -->
+        <mxCell id="coder-section" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;strokeWidth=2;dashed=1;dashPattern=8 8;" vertex="1" parent="1">
+          <mxGeometry x="510" y="160" width="380" height="400" as="geometry" />
+        </mxCell>
+
+        <mxCell id="coder-title" value="② Coder" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#1976D2;" vertex="1" parent="1">
+          <mxGeometry x="525" y="170" width="200" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="coder-model" value="Model: Haiku/Sonnet/Opus" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="525" y="190" width="200" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="coder-input" value="Input: current_task&#xa;read_files, write_files" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BBDEFB;strokeColor=#1976D2;strokeWidth=1.5;fontSize=10;align=left;verticalAlign=top;fontFamily=Courier New;" vertex="1" parent="1">
+          <mxGeometry x="540" y="220" width="320" height="45" as="geometry" />
+        </mxCell>
+
+        <mxCell id="coder-step1" value="read_file(read_files[]) - 対象ファイル読込" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1976D2;strokeWidth=1.5;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="540" y="285" width="320" height="35" as="geometry" />
+        </mxCell>
+
+        <mxCell id="coder-step2" value="コード実装（LLM生成）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1976D2;strokeWidth=1.5;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="540" y="335" width="320" height="35" as="geometry" />
+        </mxCell>
+
+        <mxCell id="coder-step3" value="write_file(write_files[]) - ファイル書込" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1976D2;strokeWidth=1.5;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="540" y="385" width="320" height="35" as="geometry" />
+        </mxCell>
+
+        <mxCell id="coder-step4" value="run_shell(...) - テスト/ビルド実行" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1976D2;strokeWidth=1.5;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="540" y="435" width="320" height="35" as="geometry" />
+        </mxCell>
+
+        <mxCell id="coder-revision" value="修正モード時:&#xa;review_result を参照して修正" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF9C4;strokeColor=#F57F17;strokeWidth=1.5;fontSize=9;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="540" y="490" width="320" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- REVIEWER Section -->
+        <mxCell id="reviewer-section" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#7B1FA2;strokeWidth=2;dashed=1;dashPattern=8 8;" vertex="1" parent="1">
+          <mxGeometry x="940" y="160" width="380" height="380" as="geometry" />
+        </mxCell>
+
+        <mxCell id="reviewer-title" value="③ Reviewer" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#7B1FA2;" vertex="1" parent="1">
+          <mxGeometry x="955" y="170" width="200" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="reviewer-model" value="Model: 1段階下のティア" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="955" y="190" width="200" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="reviewer-step1" value="read_file(write_files[]) - 実装確認" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7B1FA2;strokeWidth=1.5;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="970" y="220" width="320" height="35" as="geometry" />
+        </mxCell>
+
+        <mxCell id="reviewer-step2" value="run_shell(...) - テスト実行" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7B1FA2;strokeWidth=1.5;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="970" y="270" width="320" height="35" as="geometry" />
+        </mxCell>
+
+        <mxCell id="reviewer-step3" value="レビュー基準チェック:&#xa;・要件を満たしているか&#xa;・構文エラーがないか&#xa;・テストが通るか" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7B1FA2;strokeWidth=1.5;fontSize=10;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="970" y="320" width="320" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="reviewer-step4" value="判定生成（JSON）:&#xa;{result: PASS/FAIL,&#xa; needs_revision: bool,&#xa; comment: string}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7B1FA2;strokeWidth=1.5;fontSize=10;align=left;verticalAlign=top;fontFamily=Courier New;" vertex="1" parent="1">
+          <mxGeometry x="970" y="410" width="320" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="reviewer-output" value="write docs/review_XX.md" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1BEE7;strokeColor=#7B1FA2;strokeWidth=1.5;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="970" y="495" width="320" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Decision Section -->
+        <mxCell id="decision-section" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#FF6F00;strokeWidth=2;dashed=1;dashPattern=8 8;" vertex="1" parent="1">
+          <mxGeometry x="510" y="600" width="810" height="180" as="geometry" />
+        </mxCell>
+
+        <mxCell id="decision-title" value="④ 条件分岐" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#FF6F00;" vertex="1" parent="1">
+          <mxGeometry x="525" y="610" width="200" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="decision-diamond" value="needs_revision &amp;&amp;&#xa;revision_count &lt; 2?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#FF6F00;strokeWidth=2;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="800" y="650" width="180" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="revision-counter" value="revision_counter++&#xa;→ Coder に戻る" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE082;strokeColor=#FF6F00;strokeWidth=1.5;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1050" y="670" width="150" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="running-check" value="running_check&#xa;→ 次タスクへ" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE082;strokeColor=#FF6F00;strokeWidth=1.5;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="570" y="670" width="150" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Running Check Section -->
+        <mxCell id="running-section" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F7FA;strokeColor=#00838F;strokeWidth=2;dashed=1;dashPattern=8 8;" vertex="1" parent="1">
+          <mxGeometry x="80" y="600" width="380" height="240" as="geometry" />
+        </mxCell>
+
+        <mxCell id="running-title" value="⑤ Running Check" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#00838F;" vertex="1" parent="1">
+          <mxGeometry x="95" y="610" width="200" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="running-check-iot" value="IoTステータス確認&#xa;（get_iot_status）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#00838F;strokeWidth=1.5;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="110" y="650" width="320" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="running-pop-task" value="task_list.pop(0)&#xa;現在タスクを削除" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#00838F;strokeWidth=1.5;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="110" y="710" width="320" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="running-next" value="次タスクをセット&#xa;revision_count = 0" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#00838F;strokeWidth=1.5;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="110" y="770" width="320" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Continue Decision -->
+        <mxCell id="continue-section" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FCE4EC;strokeColor=#C2185B;strokeWidth=2;dashed=1;dashPattern=8 8;" vertex="1" parent="1">
+          <mxGeometry x="80" y="880" width="1240" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="continue-title" value="⑥ 継続判定" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#C2185B;" vertex="1" parent="1">
+          <mxGeometry x="95" y="890" width="200" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="continue-diamond" value="task_list 残り &amp;&amp;&#xa;is_running?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C2185B;strokeWidth=2;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="510" y="910" width="180" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="continue-yes" value="YES → Coder" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8BBD0;strokeColor=#C2185B;strokeWidth=1.5;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="770" y="925" width="130" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="continue-no" value="NO → END" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8BBD0;strokeColor=#C2185B;strokeWidth=1.5;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="270" y="925" width="130" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- END -->
+        <mxCell id="end" value="END" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F44336;strokeColor=#C62828;strokeWidth=2;fontColor=#FFFFFF;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="285" y="1040" width="100" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Tools Legend -->
+        <mxCell id="tools-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#616161;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="80" y="1040" width="1240" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tools-title" value="使用ツール一覧" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=13;fontStyle=1;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="95" y="1050" width="200" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tool1" value="• read_file(path)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontFamily=Courier New;" vertex="1" parent="1">
+          <mxGeometry x="110" y="1080" width="280" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tool1-desc" value="ファイル読込" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="390" y="1080" width="180" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tool2" value="• write_file(path, content)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontFamily=Courier New;" vertex="1" parent="1">
+          <mxGeometry x="110" y="1105" width="280" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tool2-desc" value="ファイル書込" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="390" y="1105" width="180" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tool3" value="• list_files(directory)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontFamily=Courier New;" vertex="1" parent="1">
+          <mxGeometry x="110" y="1130" width="280" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tool3-desc" value="ファイル一覧取得" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="390" y="1130" width="180" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tool4" value="• run_shell(command, cwd)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontFamily=Courier New;" vertex="1" parent="1">
+          <mxGeometry x="610" y="1080" width="280" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tool4-desc" value="シェルコマンド実行" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="890" y="1080" width="180" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tool5" value="• read_file_lines(path, start, end)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontFamily=Courier New;" vertex="1" parent="1">
+          <mxGeometry x="610" y="1105" width="280" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tool5-desc" value="部分読込（トークン節約）" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="890" y="1105" width="180" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tool6" value="• get_iot_status(device_id)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontFamily=Courier New;" vertex="1" parent="1">
+          <mxGeometry x="610" y="1130" width="280" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tool6-desc" value="IoTステータス取得" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="890" y="1130" width="180" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Arrows -->
+        <mxCell id="arrow-start-planner" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2.5;strokeColor=#424242;endArrow=classic;endFill=1;" edge="1" parent="1" source="start" target="planner-step1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="700" y="140" />
+              <mxPoint x="270" y="140" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="arrow-planner-internal1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#4CAF50;endArrow=classic;endFill=1;" edge="1" parent="1" source="planner-step1" target="planner-step2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow-planner-internal2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#4CAF50;endArrow=classic;endFill=1;" edge="1" parent="1" source="planner-step2" target="planner-step3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow-planner-internal3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#4CAF50;endArrow=classic;endFill=1;" edge="1" parent="1" source="planner-step3" target="planner-step4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow-planner-internal4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#4CAF50;endArrow=classic;endFill=1;" edge="1" parent="1" source="planner-step4" target="planner-output">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow-planner-coder" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2.5;strokeColor=#424242;endArrow=classic;endFill=1;" edge="1" parent="1" source="planner-output" target="coder-input">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow-coder-internal1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#1976D2;endArrow=classic;endFill=1;" edge="1" parent="1" source="coder-input" target="coder-step1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow-coder-internal2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#1976D2;endArrow=classic;endFill=1;" edge="1" parent="1" source="coder-step1" target="coder-step2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow-coder-internal3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#1976D2;endArrow=classic;endFill=1;" edge="1" parent="1" source="coder-step2" target="coder-step3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow-coder-internal4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#1976D2;endArrow=classic;endFill=1;" edge="1" parent="1" source="coder-step3" target="coder-step4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow-coder-reviewer" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2.5;strokeColor=#424242;endArrow=classic;endFill=1;" edge="1" parent="1" source="coder-step4" target="reviewer-step1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="700" y="570" />
+              <mxPoint x="1130" y="570" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="arrow-reviewer-internal1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7B1FA2;endArrow=classic;endFill=1;" edge="1" parent="1" source="reviewer-step1" target="reviewer-step2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow-reviewer-internal2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7B1FA2;endArrow=classic;endFill=1;" edge="1" parent="1" source="reviewer-step2" target="reviewer-step3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow-reviewer-internal3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7B1FA2;endArrow=classic;endFill=1;" edge="1" parent="1" source="reviewer-step3" target="reviewer-step4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow-reviewer-internal4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7B1FA2;endArrow=classic;endFill=1;" edge="1" parent="1" source="reviewer-step4" target="reviewer-output">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow-reviewer-decision" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2.5;strokeColor=#424242;endArrow=classic;endFill=1;" edge="1" parent="1" source="reviewer-output" target="decision-diamond">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1130" y="570" />
+              <mxPoint x="890" y="570" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="arrow-decision-yes" value="YES" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2.5;strokeColor=#FF6F00;endArrow=classic;endFill=1;fontStyle=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="decision-diamond" target="revision-counter">
+          <mxGeometry x="-0.2" y="10" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="arrow-decision-no" value="NO" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2.5;strokeColor=#FF6F00;endArrow=classic;endFill=1;fontStyle=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="decision-diamond" target="running-check">
+          <mxGeometry x="0.2" y="10" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="arrow-revision-coder" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#FF6F00;endArrow=classic;endFill=1;dashed=1;dashPattern=8 8;" edge="1" parent="1" source="revision-counter" target="coder-step1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1350" y="700" />
+              <mxPoint x="1350" y="302" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="arrow-running-check-to-section" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2.5;strokeColor=#424242;endArrow=classic;endFill=1;" edge="1" parent="1" source="running-check" target="running-check-iot">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="490" y="700" />
+              <mxPoint x="490" y="670" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="arrow-running-internal1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#00838F;endArrow=classic;endFill=1;" edge="1" parent="1" source="running-check-iot" target="running-pop-task">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow-running-internal2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#00838F;endArrow=classic;endFill=1;" edge="1" parent="1" source="running-pop-task" target="running-next">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arrow-running-continue" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2.5;strokeColor=#424242;endArrow=classic;endFill=1;" edge="1" parent="1" source="running-next" target="continue-diamond">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="270" y="850" />
+              <mxPoint x="600" y="850" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="arrow-continue-yes" value="YES" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2.5;strokeColor=#C2185B;endArrow=classic;endFill=1;fontStyle=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="continue-diamond" target="continue-yes">
+          <mxGeometry x="-0.2" y="10" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="arrow-continue-no" value="NO" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2.5;strokeColor=#C2185B;endArrow=classic;endFill=1;fontStyle=1;fontSize=11;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="continue-diamond" target="continue-no">
+          <mxGeometry x="0.2" y="10" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="arrow-yes-to-coder" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#C2185B;endArrow=classic;endFill=1;dashed=1;dashPattern=8 8;" edge="1" parent="1" source="continue-yes" target="coder-input">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="950" y="945" />
+              <mxPoint x="950" y="120" />
+              <mxPoint x="700" y="120" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="arrow-no-to-end" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2.5;strokeColor=#C2185B;endArrow=classic;endFill=1;" edge="1" parent="1" source="continue-no" target="end">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
