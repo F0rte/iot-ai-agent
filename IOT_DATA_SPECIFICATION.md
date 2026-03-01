@@ -46,12 +46,12 @@
 
 ### Components
 
-| Component | Role | Technology |
-|-----------|------|------------|
-| **IoT Device** | Sensor data source (motion, heart rate) | Swift (iOS/watchOS SDK) or custom firmware |
-| **AWS IoT Core** | MQTT broker, message routing | AWS managed service |
-| **AI Agent** | Receives IoT data, processes with LLM | Python, FastAPI, LangGraph, Claude AI |
-| **VS Code Extension** | Displays real-time events, UI control | TypeScript, WebView API |
+| Component             | Role                                    | Technology                                 |
+| --------------------- | --------------------------------------- | ------------------------------------------ |
+| **IoT Device**        | Sensor data source (motion, heart rate) | Swift (iOS/watchOS SDK) or custom firmware |
+| **AWS IoT Core**      | MQTT broker, message routing            | AWS managed service                        |
+| **AI Agent**          | Receives IoT data, processes with LLM   | Python, FastAPI, LangGraph, Claude AI      |
+| **VS Code Extension** | Displays real-time events, UI control   | TypeScript, WebView API                    |
 
 ---
 
@@ -65,10 +65,10 @@ hackathon/run/{environment}
 
 ### Current Topics
 
-| Topic | Purpose | Publisher | Subscriber |
-|-------|---------|-----------|------------|
-| `hackathon/run/test` | Development/testing | IoT Device | AI Agent |
-| `hackathon/run/prod` | Production (reserved) | IoT Device | AI Agent |
+| Topic                | Purpose               | Publisher  | Subscriber |
+| -------------------- | --------------------- | ---------- | ---------- |
+| `hackathon/run/test` | Development/testing   | IoT Device | AI Agent   |
+| `hackathon/run/prod` | Production (reserved) | IoT Device | AI Agent   |
 
 ### Topic Design Notes
 
@@ -113,8 +113,8 @@ hackathon/run/{environment}
 
 ```json
 {
-  "status": "Run" | "Walk" | "None",
-  "bpm": float,
+  "is_running": boolean,
+  "bpm": integer,
   "timestamp": string (ISO 8601, optional),
   "device_id": string (optional)
 }
@@ -122,55 +122,50 @@ hackathon/run/{environment}
 
 #### Field Descriptions
 
-| Field | Type | Required | Description | Example |
-|-------|------|----------|-------------|---------|
-| `status` | string | ✅ Yes | Activity status determined by device-side threshold | `"Run"`, `"Walk"`, `"None"` |
-| `bpm` | float | ✅ Yes | Acceleration magnitude (m/s²) used for activity detection | `25.3` |
-| `timestamp` | string | ❌ No | ISO 8601 timestamp when data was captured | `"2026-02-28T10:30:00Z"` |
-| `device_id` | string | ❌ No | Unique identifier for the device | `"esp32-aabbccddeeff"` |
-
-#### Status Values
-
-| Value | Condition | Model Tier |
-|-------|-----------|------------|
-| `"Run"` | `bpm > 30.0` | sonnet (claude-sonnet-4-5) |
-| `"Walk"` | `bpm > 20.0` | sonnet-3 (claude-3-5-sonnet) |
-| `"None"` | `bpm <= 20.0` | haiku (claude-haiku-4-5) |
+| Field        | Type    | Required | Description                               | Example                   |
+| ------------ | ------- | -------- | ----------------------------------------- | ------------------------- |
+| `is_running` | boolean | ✅ Yes   | Whether the user is currently running     | `true`, `false`           |
+| `bpm`        | integer | ✅ Yes   | Heart rate in beats per minute            | `135`                     |
+| `timestamp`  | string  | ❌ No    | ISO 8601 timestamp when data was captured | `"2026-02-28T10:30:00Z"`  |
+| `device_id`  | string  | ❌ No    | Unique identifier for the device          | `"swift-client-a1b2c3d4"` |
 
 #### Validation Rules
 
-- `status`: Must be one of `"Run"`, `"Walk"`, `"None"`
-- `bpm`: Float value representing acceleration magnitude in m/s²
+- `is_running`: Must be `true` or `false`
+- `bpm`: Must be integer, range 30-220 (typical human heart rate)
 - `timestamp`: Must be valid ISO 8601 format if provided
 - `device_id`: Max 64 characters
 
 #### Example Messages
 
-**Running**:
+**Minimal (current implementation)**:
+
 ```json
 {
-  "status": "Run",
-  "bpm": 35.2
+  "is_running": true,
+  "bpm": 135
 }
 ```
 
 **Complete**:
+
 ```json
 {
-  "status": "Walk",
-  "bpm": 22.5,
+  "is_running": true,
+  "bpm": 142,
   "timestamp": "2026-02-28T10:45:32Z",
-  "device_id": "esp32-aabbccddeeff"
+  "device_id": "swift-client-a1b2c3d4"
 }
 ```
 
-**Stopped**:
+**Running stopped**:
+
 ```json
 {
-  "status": "None",
-  "bpm": 10.1,
+  "is_running": false,
+  "bpm": 98,
   "timestamp": "2026-02-28T11:15:00Z",
-  "device_id": "esp32-aabbccddeeff"
+  "device_id": "swift-client-a1b2c3d4"
 }
 ```
 
@@ -182,8 +177,8 @@ For more advanced fitness tracking, the schema can be extended:
 
 ```json
 {
-  "status": "Run" | "Walk" | "None",
-  "bpm": float,
+  "is_running": boolean,
+  "bpm": integer,
   "timestamp": string,
   "device_id": string,
   "metrics": {
@@ -216,8 +211,8 @@ Sent immediately when IoT data is received.
   "type": "iot",
   "topic": "hackathon/run/test",
   "data": {
-    "status": "Run",
-    "bpm": 35.2
+    "is_running": true,
+    "bpm": 135
   }
 }
 ```
@@ -261,6 +256,7 @@ Keep-alive message (ignored by client).
 ### IoT Device Connection
 
 #### Authentication
+
 - **Method**: AWS IAM Static Credentials
 - **Required Credentials**:
   - `AWS_ACCESS_KEY_ID`
@@ -268,6 +264,7 @@ Keep-alive message (ignored by client).
   - `AWS_IOT_ENDPOINT` (e.g., `xxxxx.iot.ap-northeast-1.amazonaws.com`)
 
 #### Connection Parameters
+
 - **Protocol**: MQTT over WebSockets
 - **Region**: `ap-northeast-1` (Tokyo)
 - **Client ID Format**: `swift-client-{UUID_PREFIX}` or `custom-device-{UUID}`
@@ -275,6 +272,7 @@ Keep-alive message (ignored by client).
 - **Keep Alive**: 30 seconds (configurable)
 
 #### Swift (iOS/watchOS) Example
+
 ```swift
 let clientId = "swift-client-\(UUID().uuidString.prefix(8))"
 iotDataManager?.connectUsingWebSocket(
@@ -286,6 +284,7 @@ iotDataManager?.connectUsingWebSocket(
 ```
 
 #### Generic MQTT Client Example
+
 ```python
 # Using paho-mqtt or similar
 client_id = f"custom-device-{uuid.uuid4().hex[:8]}"
@@ -313,6 +312,7 @@ AWS_SECRET_ACCESS_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 #### Connection Parameters
+
 - **Protocol**: MQTT over WebSockets with AWS SigV4 signing
 - **Client ID**: `ai-agent-{RANDOM_HEX}` (8 characters)
 - **Clean Session**: `true`
@@ -328,7 +328,7 @@ AWS_SECRET_ACCESS_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 **File**: `vscode-extension/src/panel.ts`
 
 ```javascript
-const es = new EventSource('http://localhost:8000/events');
+const es = new EventSource("http://localhost:8000/events");
 ```
 
 - **Protocol**: HTTP Server-Sent Events
@@ -342,26 +342,26 @@ const es = new EventSource('http://localhost:8000/events');
 
 ### Device-Side Errors
 
-| Error | Cause | Handling |
-|-------|-------|----------|
-| Connection Failed | Invalid credentials or endpoint | Retry with exponential backoff |
-| Publish Failed | Network issue or QoS=1 timeout | Log error, retry next data point |
-| Disconnected | Network interruption | Auto-reconnect via SDK |
+| Error             | Cause                           | Handling                         |
+| ----------------- | ------------------------------- | -------------------------------- |
+| Connection Failed | Invalid credentials or endpoint | Retry with exponential backoff   |
+| Publish Failed    | Network issue or QoS=1 timeout  | Log error, retry next data point |
+| Disconnected      | Network interruption            | Auto-reconnect via SDK           |
 
 ### AI Agent-Side Errors
 
-| Error | Cause | Handling |
-|-------|-------|----------|
-| JSON Parse Error | Invalid message format | Log error, send error event to extension |
-| LLM API Error | Bedrock/Anthropic API failure | Catch exception, broadcast error event |
-| Connection Lost | IoT Core disconnected | Auto-reconnect via SDK callback |
+| Error            | Cause                         | Handling                                 |
+| ---------------- | ----------------------------- | ---------------------------------------- |
+| JSON Parse Error | Invalid message format        | Log error, send error event to extension |
+| LLM API Error    | Bedrock/Anthropic API failure | Catch exception, broadcast error event   |
+| Connection Lost  | IoT Core disconnected         | Auto-reconnect via SDK callback          |
 
 ### VS Code Extension Errors
 
-| Error | Cause | Handling |
-|-------|-------|----------|
+| Error                 | Cause                | Handling                          |
+| --------------------- | -------------------- | --------------------------------- |
 | SSE Connection Failed | AI agent not running | Show error status, retry every 5s |
-| Invalid Event Data | Malformed JSON | Ignore event, log to console |
+| Invalid Event Data    | Malformed JSON       | Ignore event, log to console      |
 
 ---
 
@@ -398,8 +398,8 @@ connect_future.result()
 # Publish data
 topic = "hackathon/run/test"
 message = {
-    "status": "Run",
-    "bpm": 35.2,
+    "is_running": True,
+    "bpm": 145,
     "timestamp": "2026-02-28T10:45:00Z",
     "device_id": "custom-sensor-001"
 }
@@ -430,9 +430,9 @@ const char* topic = "hackathon/run/test";
 WiFiClientSecure espClient;
 PubSubClient client(espClient);
 
-void publishRunData(const char* status, float bpm) {
+void publishRunData(bool isRunning, int bpm) {
     StaticJsonDocument<200> doc;
-    doc["status"] = status;
+    doc["is_running"] = isRunning;
     doc["bpm"] = bpm;
     doc["timestamp"] = getCurrentTimestamp(); // Implement this
     doc["device_id"] = "esp32-001";
@@ -444,10 +444,10 @@ void publishRunData(const char* status, float bpm) {
 }
 
 void loop() {
-    float accel = readAccelMagnitude();  // Implement sensor logic
-    const char* status = accel > 30.0f ? "Run" : accel > 20.0f ? "Walk" : "None";
+    bool isRunning = detectMotion(); // Implement sensor logic
+    int bpm = readHeartRate();       // Implement sensor logic
 
-    publishRunData(status, accel);
+    publishRunData(isRunning, bpm);
     delay(5000); // Send every 5 seconds
 }
 ```
@@ -463,7 +463,7 @@ void loop() {
 # Publish test message
 aws iot-data publish \
   --topic "hackathon/run/test" \
-  --payload '{"status":"Run","bpm":35.2}' \
+  --payload '{"is_running":true,"bpm":120}' \
   --endpoint-url https://xxxxx.iot.ap-northeast-1.amazonaws.com
 
 # Or using mosquitto_pub with WebSockets
@@ -471,7 +471,7 @@ mosquitto_pub \
   -h xxxxx.iot.ap-northeast-1.amazonaws.com \
   -p 443 \
   -t "hackathon/run/test" \
-  -m '{"status":"Run","bpm":35.2}' \
+  -m '{"is_running":true,"bpm":120}' \
   --cafile AmazonRootCA1.pem
 ```
 
@@ -480,10 +480,12 @@ mosquitto_pub \
 ## 📚 Additional Resources
 
 ### AWS IoT Core Documentation
+
 - [AWS IoT Core WebSocket Connection](https://docs.aws.amazon.com/iot/latest/developerguide/protocols.html#mqtt-ws)
 - [MQTT Topic Design Best Practices](https://docs.aws.amazon.com/whitepapers/latest/designing-mqtt-topics-aws-iot-core/designing-mqtt-topics-aws-iot-core.html)
 
 ### Project-Specific Files
+
 - **AI Agent Subscriber**: `ai-agent/iot/subscriber.py`
 - **Swift App Publisher**: `watch-app/AgentController/AgentController/ContentView.swift`
 - **VS Code Extension**: `vscode-extension/src/panel.ts`
@@ -492,9 +494,9 @@ mosquitto_pub \
 
 ## 🔄 Version History
 
-| Version | Date | Changes |
-|---------|------|---------|
-| 1.0.0 | 2026-02-28 | Initial specification based on current implementation |
+| Version | Date       | Changes                                               |
+| ------- | ---------- | ----------------------------------------------------- |
+| 1.0.0   | 2026-02-28 | Initial specification based on current implementation |
 
 ---
 
